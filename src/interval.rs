@@ -166,6 +166,33 @@ impl<F: RoundFloat> Interval<F> {
             Repr::NonEmpty { lo, hi } => lo <= x && x <= hi,
         }
     }
+
+    /// The endpoints, or `None` for the empty interval. Crate-internal so the
+    /// operation modules can pattern-match without exposing the representation.
+    pub(crate) fn bounds(self) -> Option<(F, F)> {
+        match self.repr {
+            Repr::Empty => None,
+            Repr::NonEmpty { lo, hi } => Some((lo, hi)),
+        }
+    }
+
+    /// Build a nonempty interval from computed operation endpoints.
+    ///
+    /// Operations establish the invariant by their endpoint arithmetic (outward
+    /// rounding only widens, and `min <= max`), so this is total. If the
+    /// invariant is ever violated, that is a bug in an operation; in debug builds
+    /// it trips an assertion, and in release it degrades to `Entire`, which is
+    /// always a sound enclosure. The crate never returns an unsound result and
+    /// never panics on a caller's input.
+    pub(crate) fn hull(lo: F, hi: F) -> Self {
+        Self::new(lo, hi).unwrap_or_else(|_| {
+            debug_assert!(
+                false,
+                "operation produced endpoints violating the interval invariant"
+            );
+            Self::entire()
+        })
+    }
 }
 
 #[cfg(all(test, feature = "fixture"))]
