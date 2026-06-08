@@ -57,6 +57,7 @@
 extern crate std;
 
 pub mod error;
+pub mod functions;
 pub mod interval;
 pub mod ops;
 pub mod round;

@@ -48,3 +48,18 @@ v1.0; before then the API may break between 0.x releases.
   enclosure rests on the `spec` argument and the property tests, with an
   abstract-axiom Kani approach recorded in ADR-0003 as the route to a proven
   four-corner. See ADR-0003.
+
+- Phase C, numeric, boolean, and set functions.
+  - Numeric: `wid`, `mag`, `mig`, each returning `Option<F>` (`None` for the
+    empty interval, where the standard returns NaN, keeping the empty case
+    explicit in the type).
+  - Boolean relations: `subset`, `interior`, `disjoint`, with the empty set
+    handled as the identity it is.
+  - Set operations: `intersection` (empty when the operands do not overlap) and
+    `convex_hull` (the empty set as identity).
+  - Property tests including inclusion isotonicity for `+`, `-`, `*` (the
+    monotonicity half of the fundamental theorem), intersection contained in both
+    operands, convex hull containing both, and `disjoint` iff empty intersection.
+  - Deferred: `mid` and `rad`, and the ordering relations (`less`, `precedes` and
+    their strict forms), pending the Level 2 conventions for their empty and
+    unbounded cases.

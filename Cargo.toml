@@ -47,6 +47,10 @@ proptest = "1"
 name = "enclosure_fixture"
 required-features = ["fixture"]
 
+[[test]]
+name = "functions_fixture"
+required-features = ["fixture"]
+
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
