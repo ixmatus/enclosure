@@ -1,0 +1,107 @@
+//! [`RoundFloat`]: the directed-rounding float contract the interval layer is
+//! generic over.
+//!
+//! This trait is the seam between `interval-1788` and any correctly-rounded
+//! floating-point backend. It is deliberately the common core of what rigorous
+//! inf-sup arithmetic needs and what pfloat-ball's `RealScalar` already
+//! exposes, so that a future `round-float` foundation crate can lift it
+//! verbatim and both enclosure crates can share one contract. See the
+//! `docs/decisions` records.
+//!
+//! # Why split directions instead of a rounding-mode parameter
+//!
+//! Outward rounding fixes the direction statically: a lower endpoint always
+//! rounds toward minus infinity, an upper endpoint always toward plus infinity.
+//! Exposing [`add_down`](RoundFloat::add_down) and [`add_up`](RoundFloat::add_up)
+//! rather than `add(self, rhs, mode)` makes that direction a property of the
+//! call site, so the rigor-critical four-corner multiplication cannot round a
+//! corner the wrong way by passing the wrong mode. It also keeps the trait free
+//! of any backend's rounding-mode enum (ferrodec's and pfloat's are distinct
+//! types), which is what lets one trait span both.
+//!
+//! # The contract each method must honor
+//!
+//! For finite inputs, `x.add_down(y)` returns a float that is less than or equal
+//! to the exact real sum `x + y`, and `x.add_up(y)` returns one greater than or
+//! equal to it; likewise for `sub`, `mul`, `div`, and `sqrt`. A backend that is
+//! correctly rounded toward minus and plus infinity makes these tight (the
+//! returned float is the nearest representable bound). A backend that only
+//! guarantees soundness (the `f64` fixture) may return a looser bound, but never
+//! one on the wrong side. Soundness is the load-bearing obligation; tightness is
+//! a quality the backend may add.
+
+/// A floating-point type that supports the outward-directed arithmetic rigorous
+/// interval arithmetic is built on.
+///
+/// `Self::INFINITY` and `Self::NEG_INFINITY` are the extended-real endpoints
+/// used to represent unbounded intervals. The predicates classify values during
+/// construction and operation. See the [module docs](self) for the rounding
+/// contract every arithmetic method must honor.
+pub trait RoundFloat: Copy + PartialOrd {
+    /// Positive infinity, the upper endpoint of an interval unbounded above.
+    const INFINITY: Self;
+    /// Negative infinity, the lower endpoint of an interval unbounded below.
+    const NEG_INFINITY: Self;
+    /// The additive identity (`+0`).
+    const ZERO: Self;
+
+    /// A lower bound on the exact sum `self + rhs`.
+    fn add_down(self, rhs: Self) -> Self;
+    /// An upper bound on the exact sum `self + rhs`.
+    fn add_up(self, rhs: Self) -> Self;
+
+    /// A lower bound on the exact difference `self - rhs`.
+    fn sub_down(self, rhs: Self) -> Self;
+    /// An upper bound on the exact difference `self - rhs`.
+    fn sub_up(self, rhs: Self) -> Self;
+
+    /// A lower bound on the exact product `self * rhs`.
+    fn mul_down(self, rhs: Self) -> Self;
+    /// An upper bound on the exact product `self * rhs`.
+    fn mul_up(self, rhs: Self) -> Self;
+
+    /// A lower bound on the exact quotient `self / rhs`.
+    fn div_down(self, rhs: Self) -> Self;
+    /// An upper bound on the exact quotient `self / rhs`.
+    fn div_up(self, rhs: Self) -> Self;
+
+    /// A lower bound on the exact square root `sqrt(self)`.
+    fn sqrt_down(self) -> Self;
+    /// An upper bound on the exact square root `sqrt(self)`.
+    fn sqrt_up(self) -> Self;
+
+    /// Whether the value is NaN.
+    fn is_nan(self) -> bool;
+    /// Whether the value is finite (neither infinite nor NaN).
+    fn is_finite(self) -> bool;
+    /// Whether the value is positive or negative infinity.
+    fn is_infinite(self) -> bool;
+    /// Whether the value carries a negative sign (including `-0`).
+    fn is_sign_negative(self) -> bool;
+    /// Whether the value is `+0` or `-0`.
+    fn is_zero(self) -> bool;
+
+    /// The lesser of two non-NaN values.
+    ///
+    /// Used to reduce the four corners of a product or quotient to a lower
+    /// bound. Both arguments are non-NaN at every call site (interval endpoints
+    /// are non-NaN by construction), so the partial order is total here.
+    #[must_use]
+    fn rmin(self, rhs: Self) -> Self {
+        if rhs < self {
+            rhs
+        } else {
+            self
+        }
+    }
+
+    /// The greater of two non-NaN values. Companion of [`rmin`](RoundFloat::rmin).
+    #[must_use]
+    fn rmax(self, rhs: Self) -> Self {
+        if rhs > self {
+            rhs
+        } else {
+            self
+        }
+    }
+}

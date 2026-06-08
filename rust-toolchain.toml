@@ -1,0 +1,9 @@
+# Pinned stable so local builds and CI resolve the same rustc. The crate is a
+# stable, no_std foundation: SMIL (stable) consumes it via git pin, and pfloat
+# (nightly) can also consume it, so the crate itself must never need nightly.
+# The thumb targets prove the no_std cross-compile in CI. Bumps are deliberate.
+[toolchain]
+channel = "1.86.0"
+components = ["rustfmt", "clippy"]
+targets = ["thumbv6m-none-eabi", "thumbv8m.main-none-eabi"]
+profile = "minimal"
