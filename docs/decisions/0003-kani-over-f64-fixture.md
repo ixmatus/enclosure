@@ -26,9 +26,23 @@ outward is always a correct bound. It widens by up to one unit in the last place
 even when the exact result was representable. The fixture is therefore sound but
 deliberately not tight.
 
-Prove the enclosure theorem and the structural properties (the construction
-invariant survives every operation, the decoration lattice propagates monotonically)
-with Kani over this fixture. The harnesses are heap free and bounded.
+Prove the discrete, set-based case logic with Kani over this fixture: the
+total-operation edge cases that are easy to get wrong (an empty operand absorbs,
+a zero divisor gives empty, a reciprocal across zero gives Entire, a wholly
+negative square root gives empty). These reach their result through case
+selection and early returns, are heap free and bounded, and discharge quickly.
+
+Do NOT attempt the numeric enclosure theorem with Kani over this fixture. The
+finding (2026-06-08): the fixture's outward rounding uses `next_up` / `next_down`,
+which transmute `f64` to and from its bit pattern and branch on it; CBMC
+bit-blasts that into a formula too large to discharge even for one two-operand
+operation, so every enclosure harness (including a two-variable singleton merge
+gate) times out, while the arithmetic-free structural harnesses pass in seconds.
+The enclosure theorem instead rests on the written argument in `spec` (the
+`next_after` bracketing of a round-to-nearest result) and on the property tests,
+which exercise the general interior-point enclosure and the singleton merge gate
+over thousands of cases. The route to a machine-checked four-corner enclosure is
+the abstract-axiom alternative below, tracked as its own task.
 
 Verify tightness, and the enclosure of the round-to-nearest point result, with
 property tests over a correctly-rounded backend, where the directed operations
@@ -41,18 +55,32 @@ trusted reference reached out of process on a separate lane.
 
 ## Consequences
 
-- The enclosure claim is machine-checked, on a float the checker can handle.
-- The fixture's looseness must be stated loudly, or a reader will mistake it for
-  production behavior. It is documented in the module, in the crate root, and in
-  `spec` Law 6.
-- There are two notions of correctness with two methods: soundness, proven over
-  the fixture; tightness, tested over the real backend. They are not in tension;
-  soundness is the obligation and tightness is the quality.
-- Square root under the checker is the least certain item: CBMC's support for
-  `f64` sqrt is weaker than for the four basic operations. If it proves
-  intractable, the sqrt enclosure falls back to a multiplication-based model
-  (`r*r` bounds `x`) or to property tests, with the Kani sqrt harness marked
-  aspirational.
+- The discrete set-based logic is machine-checked: six harnesses (empty
+  absorption for add and mul, division by exact zero, reciprocal of an exact zero
+  and of a zero-straddling interval, square root of a wholly negative interval)
+  pass in seconds.
+- The numeric enclosure is NOT machine-checked over this fixture; it rests on the
+  `spec` argument plus the property tests. A reader expecting "enclosure proven by
+  Kani" must see this caveat, so it is stated in the harness module and here. The
+  load-bearing claim has a written proof sketch and broad property coverage, not a
+  discharged Kani proof, until the abstract-axiom approach lands.
+- The fixture's looseness (sound, not tight) must be stated loudly, or a reader
+  will mistake it for production behavior. It is in the module, the crate root,
+  and `spec` Law 6. Tightness is a backend property, tested over the
+  correctly-rounded backend, never over the fixture.
+- Square root is left to property tests regardless: its fixture path goes through
+  `libm::sqrt`, whose software implementation CBMC cannot discharge.
+
+## Alternatives considered
+
+- **Abstract-axiom Kani enclosure (the planned path to a proven four-corner).** A
+  Kani-only backend whose directed operations return symbolic values constrained
+  by the soundness inequality (`add_down(x, y) <= x + y <= add_up(x, y)`) rather
+  than computed by nextafter. This removes the bit manipulation CBMC cannot
+  handle, so the model checker reasons about the interval *algorithm* (endpoint
+  selection, the four-corner min and max) given a sound backend, which is the more
+  valuable theorem. Deferred to its own task because setting up the symbolic real
+  operands for the four-corner case takes care to keep it both honest and bounded.
 
 ## References
 

@@ -44,6 +44,8 @@ pub trait RoundFloat: Copy + PartialOrd {
     const NEG_INFINITY: Self;
     /// The additive identity (`+0`).
     const ZERO: Self;
+    /// The multiplicative identity (`1`). Used to form reciprocals as `1 / x`.
+    const ONE: Self;
 
     /// A lower bound on the exact sum `self + rhs`.
     fn add_down(self, rhs: Self) -> Self;
@@ -69,6 +71,12 @@ pub trait RoundFloat: Copy + PartialOrd {
     fn sqrt_down(self) -> Self;
     /// An upper bound on the exact square root `sqrt(self)`.
     fn sqrt_up(self) -> Self;
+
+    /// Exact negation (a sign flip, never rounded). Negating an endpoint to form
+    /// `-[a, b] = [-b, -a]` loses no information, so it does not need a direction.
+    /// Named `negate` rather than `neg` to avoid clashing with `core::ops::Neg`
+    /// on backends (such as `f64`) that also implement the operator.
+    fn negate(self) -> Self;
 
     /// Whether the value is NaN.
     fn is_nan(self) -> bool;

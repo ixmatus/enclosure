@@ -30,6 +30,7 @@ impl RoundFloat for f64 {
     const INFINITY: Self = f64::INFINITY;
     const NEG_INFINITY: Self = f64::NEG_INFINITY;
     const ZERO: Self = 0.0;
+    const ONE: Self = 1.0;
 
     #[inline]
     fn add_down(self, rhs: Self) -> Self {
@@ -70,6 +71,10 @@ impl RoundFloat for f64 {
     #[inline]
     fn sqrt_up(self) -> Self {
         libm::sqrt(self).next_up()
+    }
+    #[inline]
+    fn negate(self) -> Self {
+        -self
     }
 
     #[inline]
