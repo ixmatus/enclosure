@@ -85,19 +85,23 @@ upstream, not a clean room audit. If you spot a passage that reads like a copy
 from a source it should not be copied from, please open an issue.
 
 **Verification.** The verification design places correctness in the type system
-where it can: the lower-or-equal-upper invariant is held by construction and
-cannot be expressed away, and the directed-rounding contract states the soundness
-obligation each backend must meet. It places correctness in formal proof
-harnesses (Kani) where the cost is justified: the enclosure theorem is checked
-over the f64 fixture, which CBMC can model bit for bit, and the decoration
-propagation is a finite lattice amenable to the same treatment. It places
-correctness in property tests against a correctly-rounded backend (enclosure of
-the point result and the tightness the fixture cannot show), in the
-self-consistency of the fundamental theorem of interval arithmetic, in the
-IEEE 1788 conformance test vectors, and in differential tests against a trusted
-reference on a separate lane reached out of process so its copyleft does not
-enter the link graph. Significant decisions are recorded as ADRs in the
-repository.
+where it can: the requirement that the lower endpoint never exceed the upper is
+held by construction and cannot be expressed away, and the directed-rounding
+contract states the soundness obligation each backend must meet. It places
+correctness in formal proof harnesses (Kani) where the model checker can
+discharge them: the discrete set-based case logic (an empty operand absorbs, a
+zero divisor yields the empty set, a reciprocal across zero yields the whole
+line) is proven this way. The numeric enclosure theorem is not among them,
+because the directed rounding that makes the fixture sound manipulates the
+floating-point bit pattern and the model checker cannot reduce that at scale; the
+enclosure rests instead on a written argument in the specification and on
+property tests that exercise it over many inputs, including the singleton case a
+calculator depends on. The design is further meant to check tightness against a
+correctly-rounded backend, a property the deliberately sound fixture cannot show,
+and to add the IEEE 1788 conformance test vectors and differential tests against
+a trusted reference run out of process so its copyleft does not enter the link
+graph. Significant decisions, including where a proof gave way to a test and why,
+are recorded as ADRs in the repository.
 
 **Scope.** interval-1788 is a personal project. The intended consumer is the
 broader Rust scientific and embedded ecosystem: anyone who needs a guaranteed
