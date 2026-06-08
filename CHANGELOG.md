@@ -63,3 +63,23 @@ v1.0; before then the API may break between 0.x releases.
   - Deferred: `mid` and `rad`, and the ordering relations (`less`, `precedes` and
     their strict forms), pending the Level 2 conventions for their empty and
     unbounded cases.
+
+- Phase D, decorations.
+  - `Decoration`, the `com`/`dac`/`def`/`trv`/`ill` lattice, with `meet` (the
+    weaker of two, the propagation combine; `ill` absorbing, `com` the identity).
+  - `DecoratedInterval<F>`: an interval paired with a decoration. `new_dec`
+    (strongest decoration for a bare interval), `nai` (the Not-an-Interval
+    poison), `set_dec` (checked pairing, NaI on an inconsistent combination),
+    `interval` and `decoration` accessors. The `+`, `-`, `*`, `/` operators plus
+    `neg`, `recip`, `sqr`, `sqrt`, each propagating the decoration per the
+    fundamental theorem of decorated interval arithmetic: the result carries the
+    meet of the inputs' decorations and the operation's local decoration (`trv`
+    when undefined somewhere on the box, `com` on bounded inputs, `dac` when
+    unbounded). A NaI input poisons the result.
+  - Six Kani proofs of the lattice laws (meet commutative, associative,
+    idempotent, `ill` absorbing, `com` identity, monotone), all passing. The
+    decoration layer is finite-state, so this is the part of the crate the model
+    checker discharges fully.
+  - Property tests: decoration never strengthens through an operation, NaI poisons
+    exactly when an input is NaI, every result is a consistent decorated pair, and
+    the bare interval matches the undecorated operation.

@@ -29,7 +29,7 @@
 //! That is tracked as its own task. The decoration lattice (a later phase) is a
 //! finite-state structure with no float arithmetic and is a natural Kani target.
 
-use crate::Interval;
+use crate::{Decoration, Interval};
 
 /// An arbitrary bounded interval (both endpoints finite).
 fn any_bounded() -> Interval<f64> {
@@ -38,6 +38,79 @@ fn any_bounded() -> Interval<f64> {
     kani::assume(lo.is_finite() && hi.is_finite());
     kani::assume(lo <= hi);
     Interval::new(lo, hi).unwrap()
+}
+
+// --- The decoration lattice (finite state, no float arithmetic) ---
+//
+// This is where the model checker is decisive: the propagation combine is a meet
+// over a five-element lattice, and these harnesses prove its laws exhaustively.
+
+/// An arbitrary decoration.
+fn any_decoration() -> Decoration {
+    let n: u8 = kani::any();
+    kani::assume(n < 5);
+    match n {
+        0 => Decoration::Ill,
+        1 => Decoration::Trv,
+        2 => Decoration::Def,
+        3 => Decoration::Dac,
+        _ => Decoration::Com,
+    }
+}
+
+#[kani::proof]
+fn meet_is_commutative() {
+    let a = any_decoration();
+    let b = any_decoration();
+    kani::assert(a.meet(b) == b.meet(a), "meet is commutative");
+}
+
+#[kani::proof]
+fn meet_is_associative() {
+    let a = any_decoration();
+    let b = any_decoration();
+    let c = any_decoration();
+    kani::assert(
+        a.meet(b).meet(c) == a.meet(b.meet(c)),
+        "meet is associative",
+    );
+}
+
+#[kani::proof]
+fn meet_is_idempotent() {
+    let a = any_decoration();
+    kani::assert(a.meet(a) == a, "meet is idempotent");
+}
+
+#[kani::proof]
+fn ill_absorbs_under_meet() {
+    let a = any_decoration();
+    kani::assert(
+        Decoration::Ill.meet(a) == Decoration::Ill,
+        "ill is absorbing: an invalid construction poisons the result",
+    );
+}
+
+#[kani::proof]
+fn com_is_the_meet_identity() {
+    let a = any_decoration();
+    kani::assert(
+        Decoration::Com.meet(a) == a,
+        "com is the identity: combining with the strongest decoration changes nothing",
+    );
+}
+
+#[kani::proof]
+fn meet_is_monotone() {
+    let a = any_decoration();
+    let a2 = any_decoration();
+    let b = any_decoration();
+    let b2 = any_decoration();
+    kani::assume(a <= a2 && b <= b2);
+    kani::assert(
+        a.meet(b) <= a2.meet(b2),
+        "meet is monotone: weaker inputs cannot yield a stronger result",
+    );
 }
 
 /// The reciprocal of an interval with zero strictly interior is `Entire`.

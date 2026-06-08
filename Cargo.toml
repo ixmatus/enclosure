@@ -51,6 +51,10 @@ required-features = ["fixture"]
 name = "functions_fixture"
 required-features = ["fixture"]
 
+[[test]]
+name = "decorated_fixture"
+required-features = ["fixture"]
+
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
