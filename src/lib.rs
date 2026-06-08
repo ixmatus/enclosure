@@ -65,6 +65,9 @@ pub mod spec;
 #[cfg(feature = "fixture")]
 mod f64_impl;
 
+#[cfg(all(kani, feature = "fixture"))]
+mod kani_harness;
+
 pub use error::IntervalError;
 pub use interval::Interval;
 pub use round::RoundFloat;

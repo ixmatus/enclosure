@@ -38,3 +38,13 @@ v1.0; before then the API may break between 0.x releases.
     square; the singleton merge gate (a point operation's result is enclosed, the
     property the SMIL engine also gates on) for all five operations;
     commutativity of `+` and `*`; and the invariant upheld by every result.
+
+- Kani proof harnesses (`fixture` feature, `cargo kani --features fixture`) for
+  the discrete set-based case logic: empty absorption for `+` and `*`, division
+  by the exact zero interval, reciprocal of the exact zero and of a
+  zero-straddling interval, and square root of a wholly negative interval. All
+  six pass. The numeric enclosure theorem is NOT discharged by Kani over the
+  fixture (its `next_up` / `next_down` bit manipulation is intractable for CBMC);
+  enclosure rests on the `spec` argument and the property tests, with an
+  abstract-axiom Kani approach recorded in ADR-0003 as the route to a proven
+  four-corner. See ADR-0003.
