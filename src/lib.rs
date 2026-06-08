@@ -56,7 +56,10 @@
 #[cfg(feature = "std")]
 extern crate std;
 
+pub mod decorated;
+pub mod decoration;
 pub mod error;
+pub mod functions;
 pub mod interval;
 pub mod ops;
 pub mod round;
@@ -68,6 +71,8 @@ mod f64_impl;
 #[cfg(all(kani, feature = "fixture"))]
 mod kani_harness;
 
+pub use decorated::DecoratedInterval;
+pub use decoration::Decoration;
 pub use error::IntervalError;
 pub use interval::Interval;
 pub use round::RoundFloat;
