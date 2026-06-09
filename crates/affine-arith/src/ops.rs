@@ -22,14 +22,14 @@ use crate::symbol::SymbolSource;
 /// `e = add_up - z` (rounded up) bounds the gap. On a correctly-rounded backend
 /// an exactly representable sum gives `e = 0`, so an exact cancellation carries no
 /// roundoff.
-fn add_err<F: RoundFloat>(a: F, b: F) -> (F, F) {
+pub(crate) fn add_err<F: RoundFloat>(a: F, b: F) -> (F, F) {
     let lo = a.add_down(b);
     let hi = a.add_up(b);
     (lo, hi.sub_up(lo))
 }
 
 /// As [`add_err`], for the real product `a * b`.
-fn mul_err<F: RoundFloat>(a: F, b: F) -> (F, F) {
+pub(crate) fn mul_err<F: RoundFloat>(a: F, b: F) -> (F, F) {
     let lo = a.mul_down(b);
     let hi = a.mul_up(b);
     (lo, hi.sub_up(lo))
@@ -39,7 +39,11 @@ fn mul_err<F: RoundFloat>(a: F, b: F) -> (F, F) {
 /// (rounding error, or a nonlinear remainder), unless it is zero. A fresh id
 /// exceeds every id already issued by the source, so the new term stays in
 /// canonical order at the end of the vector.
-fn push_fresh<F: RoundFloat>(terms: &mut Vec<Term<F>>, coeff: F, src: &mut SymbolSource<'_>) {
+pub(crate) fn push_fresh<F: RoundFloat>(
+    terms: &mut Vec<Term<F>>,
+    coeff: F,
+    src: &mut SymbolSource<'_>,
+) {
     if !coeff.is_zero() {
         terms.push(Term::new(src.fresh(), coeff));
     }

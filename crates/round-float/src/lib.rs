@@ -131,3 +131,38 @@ pub trait RoundFloat: Copy + PartialOrd {
         }
     }
 }
+
+/// Outward-directed transcendental functions, layered above [`RoundFloat`].
+///
+/// `exp` and `ln` are not part of the common core [`RoundFloat`] models. The
+/// interval and affine crates need them only for their elementary-function
+/// surfaces, not for the basic arithmetic every backend must provide, and a
+/// backend cannot always supply a correctly-rounded transcendental as cheaply
+/// as it supplies `add` or `mul`. Holding them in a separate trait lets a
+/// backend implement them on its own schedule, or not at all, without enlarging
+/// the core contract every backend must satisfy. See round-float decision
+/// record 0001.
+///
+/// # The contract each method must honor
+///
+/// For a finite `self`, [`exp_down`](RoundTranscendental::exp_down) returns a
+/// float less than or equal to the exact real `e^self`, and
+/// [`exp_up`](RoundTranscendental::exp_up) one greater than or equal to it. For
+/// `self > 0`, [`ln_down`](RoundTranscendental::ln_down) and
+/// [`ln_up`](RoundTranscendental::ln_up) bracket the exact `ln(self)` the same
+/// way. A non-positive argument to `ln` is outside the domain: an implementation
+/// may return any value there (the f64 fixture follows `libm`, returning NaN for
+/// a negative argument and negative infinity at zero), and the caller owns the
+/// `self > 0` precondition. As with [`RoundFloat`], soundness (the bound is
+/// never on the wrong side) is the obligation; tightness is a quality a
+/// correctly-rounded backend may add.
+pub trait RoundTranscendental: RoundFloat {
+    /// A lower bound on the exact `e^self`.
+    fn exp_down(self) -> Self;
+    /// An upper bound on the exact `e^self`.
+    fn exp_up(self) -> Self;
+    /// A lower bound on the exact `ln(self)` (requires `self > 0`).
+    fn ln_down(self) -> Self;
+    /// An upper bound on the exact `ln(self)` (requires `self > 0`).
+    fn ln_up(self) -> Self;
+}
