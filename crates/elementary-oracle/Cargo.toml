@@ -1,0 +1,27 @@
+[package]
+name = "elementary-oracle"
+version = "0.0.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["Parnell Springmeyer <parnell@digitalmentat.com>"]
+repository = "https://github.com/ixmatus/enclosure"
+description = "Nightly differential oracle: certifies affine-arith and round-float's exp/ln bounds enclose pfloat-libm's correctly-rounded values. Not a workspace member; needs nightly for pfloat."
+publish = false
+
+# No runtime dependencies: the crate is a verification lane, all of whose work
+# lives in the integration tests.
+[dependencies]
+
+[dev-dependencies]
+# The bounds under test (the f64 fixture's exp/ln and the affine elementary
+# surface), and the correctly-rounded reference they are checked against.
+round-float = { path = "../round-float", features = ["f64"] }
+interval-1788 = { path = "../interval-1788" }
+affine-arith = { path = "../affine-arith", features = ["fixture"] }
+# pfloat-libm is a pure-Rust *correctly-rounded* libm, pinned to a public rev. It
+# requires nightly (pfloat's const-generic mantissa uses generic_const_exprs),
+# which is why this crate is workspace-excluded and nightly-pinned.
+pfloat-libm = { git = "https://github.com/ixmatus/pfloat.git", rev = "04c9761cccfc2724dd7d1c941a05840c9a3d9eca" }
+
+[lints.rust]
+unsafe_code = "forbid"

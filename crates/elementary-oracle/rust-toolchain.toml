@@ -1,0 +1,8 @@
+# This crate depends on pfloat, whose const-generic mantissa storage uses
+# `feature(generic_const_exprs)`, so it builds only on pfloat's pinned nightly. It
+# is excluded from the enclosure workspace, whose crates build on the stable 1.86
+# floor; this differential lane runs in a dedicated nightly CI job. The channel is
+# pinned to match pfloat's own pin for reproducibility.
+[toolchain]
+channel = "nightly-2026-05-10"
+components = ["rustfmt", "clippy"]

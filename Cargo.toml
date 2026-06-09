@@ -1,6 +1,11 @@
 [workspace]
 resolver = "2"
 members = ["crates/round-float", "crates/interval-1788", "crates/affine-arith"]
+# `elementary-oracle` is a nightly differential verification lane (it depends on
+# pfloat, which needs `feature(generic_const_exprs)`), so it cannot build on the
+# stable 1.86 floor the members share. It is excluded from the workspace and
+# carries its own toolchain pin and lockfile; a dedicated nightly CI job runs it.
+exclude = ["crates/elementary-oracle"]
 
 # Shared package metadata. Each crate is independently VERSIONED and
 # independently PUBLISHABLE; only the fields that must stay uniform across the

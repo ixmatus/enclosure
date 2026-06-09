@@ -63,3 +63,23 @@ jobs:
       - uses: model-checking/kani-github-action@v1
         with:
           args: "-p interval-1788 --features fixture"
+
+  # The transcendental oracle lane. `elementary-oracle` is workspace-excluded and
+  # depends on pfloat (a correctly-rounded libm that needs nightly for
+  # `feature(generic_const_exprs)`), so it runs on its own pinned nightly in a
+  # dedicated job. It certifies the f64 fixture's and affine-arith's exp/ln bounds
+  # enclose pfloat-libm's correctly-rounded values, discharging the soundness
+  # round-float ADR-0001 left resting on musl's accuracy goal. The shipped crates
+  # never depend on pfloat; this lane is verification only. The crate's
+  # rust-toolchain.toml pins the nightly that rustup installs on first use.
+  oracle:
+    name: transcendental oracle (nightly)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/elementary-oracle
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
