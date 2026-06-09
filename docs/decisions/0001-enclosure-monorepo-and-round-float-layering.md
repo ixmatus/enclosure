@@ -15,12 +15,17 @@ pfloat-ball's `RealScalar` is a sibling sealed trait, not a `RoundFloat`
 consumer, and cannot become one without a nightly refactor.
 
 Two new facts change the calculus. First, a second rigorous-enclosure crate is
-now being built: affine-arith, Stolfi affine arithmetic. It is generic over
-exactly the same directed-rounding contract (its form's range and the
-multiplication and elementary remainders all round outward), so it is the second
-independent `RoundFloat` consumer ADR-0002 was waiting for. Second, the family is
-growing, and the two crates plus the trait they share want a home that keeps each
-crate independent while letting them evolve together.
+now committed: affine-arith, Stolfi affine arithmetic. It is generic over exactly
+the same directed-rounding contract (its form's range and the multiplication and
+elementary remainders all round outward), so it is the second `RoundFloat`
+consumer ADR-0002 anticipated. affine-arith is a scaffold at this point, version
+0.0.0 with no operations yet, so the trait shape is not exercised by its code;
+what is fixed is the design commitment, the dependency edges, and the genericity
+over `RoundFloat`. The extraction rides on that commitment plus the shape already
+validated by the in-use ferrodec consumer and the f64 fixture, not on two working
+consumers. Second, the family is growing, and the two crates plus the trait they
+share want a home that keeps each crate independent while letting them evolve
+together.
 
 ## Decision
 
@@ -50,8 +55,9 @@ way:
 ```
 
 The sound-not-tight f64 fixture moves with the trait, behind a round-float `f64`
-feature, because it is shared verification infrastructure: both enclosure crates
-run their Kani and property lanes over the same instance. Production instances
+feature (interval-1788 re-surfaces it as its own `fixture` feature, which forwards
+to `round-float/f64`), because it is shared verification infrastructure: both
+enclosure crates run their Kani and property lanes over the same instance. Production instances
 stay consumer-side (ferrodec `Decimal128` in SMIL, pfloat's floats in pfloat).
 The extraction is a relocation, not a redesign, because ADR-0002 shaped the trait
 for it.
@@ -68,19 +74,25 @@ the `Interval` an affine form reduces to.
 ## Consequences
 
 - ADR-0002's deferred extraction is now executed; see that record for the
-  trait-shape rationale (split directions, no rounding-mode parameter). Its
-  "defer until two consumers" condition is satisfied by affine-arith.
+  trait-shape rationale (split directions, no rounding-mode parameter). That
+  record's literal condition was "both enclosure crates in use and the shape
+  proven in two consumers"; this decision relaxes it to one consumer in use
+  (ferrodec, through SMIL) and one design-committed (affine-arith), because the
+  trait shape is already validated and waiting for affine-arith's operations to
+  land would force a second, needless relocation of the trait.
 - interval-1788's public `RoundFloat` path is preserved through the re-export, so
   the SMIL/ferrodec backend and the vendored snapshot keep compiling.
   interval-1788 keeps its own version and CHANGELOG; only its dependency structure
-  changed, with no behavior change (66 unit and property tests and 12 Kani proofs
-  unchanged).
+  changed, with no behavior change (66 `#[test]` functions, including the proptest
+  property lanes, and 12 Kani proofs, all unchanged).
 - round-float is the smallest crate that can stand alone: a trait plus an optional
   fixture. It carries its own disclosure README and its own decision records as it
   grows.
 - Each crate publishes on its own schedule. The workspace shares the stable 1.86
-  toolchain pin (the wall that keeps the family consumable by stable SMIL and
-  nightly pfloat alike), one `Cargo.lock`, and one CI matrix.
+  toolchain pin, one `Cargo.lock`, and one CI matrix. The pin is the wall that
+  keeps the family consumable by stable SMIL and nightly pfloat alike; 1.86
+  specifically is the floor because round-float's f64 fixture uses
+  `f64::next_down` and `next_up`, which stabilized there.
 - GUM-style uncertainty (a value plus a standard uncertainty, ISO/IEC Guide 98-3)
   does NOT live here. It shares affine arithmetic's data structure (a central
   value plus a sparse vector of linear sensitivities) but combines by

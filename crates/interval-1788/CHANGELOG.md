@@ -93,3 +93,7 @@ v1.0; before then the API may break between 0.x releases.
   defining it locally. The crate joined the `enclosure` workspace; the repository
   metadata points at the family. No behavior changed (66 unit and property tests
   and 12 Kani proofs unchanged).
+
+  The flat path `interval_1788::RoundFloat` is preserved through the re-export.
+  The deep path `interval_1788::round::RoundFloat` is gone, since the `round`
+  module moved out; nothing in the family used it.

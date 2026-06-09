@@ -3,6 +3,13 @@
 **Status:** Accepted
 **Date:** 2026-06-07
 
+**Update (2026-06-08):** the f64 fixture this record describes moved to the
+`round-float` foundation crate, behind its `f64` feature; the source paths below
+(`src/f64_impl.rs`) are now round-float-relative. interval-1788 re-surfaces the
+instance as its `fixture` feature, so the six structural Kani harnesses still run
+via `cargo kani -p interval-1788 --features fixture`. The strategy is unchanged;
+only the fixture's home moved. See the workspace record `enclosure` ADR-0001.
+
 ## Context
 
 The load-bearing claim of a rigorous interval crate is the enclosure theorem: the
