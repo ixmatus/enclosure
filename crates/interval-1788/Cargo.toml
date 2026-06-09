@@ -1,0 +1,75 @@
+[package]
+name = "interval-1788"
+version = "0.1.0"
+edition = "2021"
+# Stable Rust. `f64::next_up` / `f64::next_down` (used only by the `fixture`
+# instance) stabilized in 1.86, which sets the floor; the core trait and type
+# need less. Pinned in `rust-toolchain.toml`; bumps are deliberate.
+rust-version = "1.86"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ixmatus/interval-1788"
+description = "Pure Rust rigorous interval arithmetic (IEEE 1788-2015, inf-sup), generic over a directed-rounding float."
+keywords = ["interval", "ieee-1788", "rigorous", "no_std", "verified"]
+categories = ["mathematics", "no-std", "science"]
+authors = ["Parnell Springmeyer <parnell@digitalmentat.com>"]
+readme = "README.md"
+# Not published while the SMIL consumer pins it by git and the crate is early.
+# The no-review posture (see README "How interval-1788 is developed") is the
+# deliberate reason it is not on crates.io yet.
+publish = false
+
+[features]
+# The core (the `RoundFloat` trait and `Interval<F>`) is no_std and depends on
+# nothing. `std` only adds `std::error::Error` for `IntervalError`.
+default = ["std"]
+std = []
+
+# The `f64` instance of `RoundFloat`. It is a verification and host-test
+# FIXTURE, not a production interval float: it trades tightness for
+# CBMC-checkability (sound `next_after` widening, never under-rounding). Tight
+# enclosure is a property of a correctly-rounded backend (ferrodec Decimal128,
+# pfloat), checked elsewhere. `libm::sqrt` keeps the fixture no_std-capable.
+fixture = ["dep:libm"]
+
+# Set by the Kani model checker via `--cfg kani`; declared so the
+# unexpected-cfgs lint stays quiet. The Kani harnesses run over the `fixture`
+# f64 instance.
+kani = []
+
+[dependencies]
+libm = { version = "0.2", default-features = false, optional = true }
+
+[dev-dependencies]
+proptest = "1"
+
+# The property lanes exercise the f64 fixture instance.
+[[test]]
+name = "enclosure_fixture"
+required-features = ["fixture"]
+
+[[test]]
+name = "functions_fixture"
+required-features = ["fixture"]
+
+[[test]]
+name = "decorated_fixture"
+required-features = ["fixture"]
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# IEEE interval math does deliberate width/sign casts and uses short symbolic
+# endpoint names; let clippy not fight the kernel's chosen vocabulary.
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+must_use_candidate = "allow"
+similar_names = "allow"
+float_cmp = "allow"
+# The directed-rounding trait methods return `Self`; their results are always
+# consumed into an endpoint at the call site. `#[must_use]` on each of the ten
+# would be noise on a low-level arithmetic contract.
+return_self_not_must_use = "allow"
