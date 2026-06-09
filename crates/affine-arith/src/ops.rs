@@ -39,13 +39,13 @@ fn mul_err<F: RoundFloat>(a: F, b: F) -> (F, F) {
 /// (rounding error, or a nonlinear remainder), unless it is zero. A fresh id
 /// exceeds every id already issued by the source, so the new term stays in
 /// canonical order at the end of the vector.
-fn push_fresh<F: RoundFloat>(terms: &mut Vec<Term<F>>, coeff: F, src: &mut SymbolSource) {
+fn push_fresh<F: RoundFloat>(terms: &mut Vec<Term<F>>, coeff: F, src: &mut SymbolSource<'_>) {
     if !coeff.is_zero() {
         terms.push(Term::new(src.fresh(), coeff));
     }
 }
 
-impl<F: RoundFloat> AffineForm<F> {
+impl<'id, F: RoundFloat> AffineForm<'id, F> {
     /// Exact negation: flips the sign of the center and every coefficient.
     ///
     /// Negation is exact (a sign flip never rounds), so it introduces no symbol
@@ -70,7 +70,7 @@ impl<F: RoundFloat> AffineForm<F> {
     /// `self`, `other`, and `src` must share one [`SymbolSource`] (see the
     /// crate-level note on sharing a symbol source).
     #[must_use]
-    pub fn add(&self, other: &Self, src: &mut SymbolSource) -> Self {
+    pub fn add(&self, other: &Self, src: &mut SymbolSource<'id>) -> Self {
         let (center, mut error) = add_err(self.center(), other.center());
         let (xs, ys) = (self.terms(), other.terms());
         let mut terms: Vec<Term<F>> = Vec::with_capacity(xs.len() + ys.len() + 1);
@@ -113,7 +113,7 @@ impl<F: RoundFloat> AffineForm<F> {
     /// `self`, `other`, and `src` must share one [`SymbolSource`] (see the
     /// crate-level note on sharing a symbol source).
     #[must_use]
-    pub fn sub(&self, other: &Self, src: &mut SymbolSource) -> Self {
+    pub fn sub(&self, other: &Self, src: &mut SymbolSource<'id>) -> Self {
         self.add(&other.negate(), src)
     }
 
@@ -125,7 +125,7 @@ impl<F: RoundFloat> AffineForm<F> {
     /// `self` and `src` must share one [`SymbolSource`] (see the crate-level note
     /// on sharing a symbol source).
     #[must_use]
-    pub fn scale(&self, scalar: F, src: &mut SymbolSource) -> Self {
+    pub fn scale(&self, scalar: F, src: &mut SymbolSource<'id>) -> Self {
         let (center, mut error) = mul_err(self.center(), scalar);
         let mut terms: Vec<Term<F>> = Vec::with_capacity(self.num_terms() + 1);
         for t in self.terms() {
@@ -160,7 +160,7 @@ impl<F: RoundFloat> AffineForm<F> {
     /// than their true `[0, 1]` range, which a dedicated squaring operation would
     /// exploit.
     #[must_use]
-    pub fn mul(&self, other: &Self, src: &mut SymbolSource) -> Self {
+    pub fn mul(&self, other: &Self, src: &mut SymbolSource<'id>) -> Self {
         let (x0, y0) = (self.center(), other.center());
         let (center, mut error) = mul_err(x0, y0);
         let (xs, ys) = (self.terms(), other.terms());

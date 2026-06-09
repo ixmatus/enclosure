@@ -1,11 +1,12 @@
 //! The affine form and its round-trip with an interval.
 
 use alloc::vec::Vec;
+use core::marker::PhantomData;
 
 use interval_1788::Interval;
 use round_float::RoundFloat;
 
-use crate::symbol::{NoiseSymbol, SymbolSource};
+use crate::symbol::{Brand, NoiseSymbol, SymbolSource};
 
 /// One deviation term `xᵢ εᵢ` of an affine form: a coefficient attached to a
 /// noise symbol.
@@ -48,19 +49,31 @@ impl<F: Copy> Term<F> {
 /// symbol and no zero coefficient. Constructors and operations re-establish this
 /// invariant rather than assume it, so the ordering can drive the linear merge
 /// in addition and subtraction.
+///
+/// # Brand
+///
+/// The lifetime `'id` brands the form to the [`SymbolSource`] (and
+/// [`with_source`](crate::with_source) scope) that produced it. Two forms can be
+/// combined only when their brands match, so the compiler refuses to mix forms
+/// built from different sources, whose symbols would otherwise collide.
 #[derive(Clone, Debug)]
-pub struct AffineForm<F> {
+pub struct AffineForm<'id, F> {
     center: F,
     terms: Vec<Term<F>>,
+    brand: Brand<'id>,
 }
 
-impl<F: RoundFloat> AffineForm<F> {
+impl<'id, F: RoundFloat> AffineForm<'id, F> {
     /// A degenerate form with no uncertainty: `x̂ = center`, no noise symbols.
+    ///
+    /// A point form carries no symbols, so it is safe to combine with any source;
+    /// its brand is inferred from the form it is used with.
     #[must_use]
     pub fn point(center: F) -> Self {
         Self {
             center,
             terms: Vec::new(),
+            brand: PhantomData,
         }
     }
 
@@ -69,7 +82,11 @@ impl<F: RoundFloat> AffineForm<F> {
     /// invariant: terms sorted by ascending symbol, no duplicate symbol, no zero
     /// coefficient.
     pub(crate) fn from_parts(center: F, terms: Vec<Term<F>>) -> Self {
-        Self { center, terms }
+        Self {
+            center,
+            terms,
+            brand: PhantomData,
+        }
     }
 
     /// An affine form enclosing a bounded, nonempty interval, introducing one
@@ -87,7 +104,7 @@ impl<F: RoundFloat> AffineForm<F> {
     /// to the center. A precise midpoint only buys tightness, never soundness.
     ///
     /// [`point`]: AffineForm::point
-    pub fn from_interval(iv: &Interval<F>, src: &mut SymbolSource) -> Option<Self> {
+    pub fn from_interval(iv: &Interval<F>, src: &mut SymbolSource<'id>) -> Option<Self> {
         if iv.is_empty() {
             return None;
         }
@@ -125,6 +142,7 @@ impl<F: RoundFloat> AffineForm<F> {
                 symbol,
                 coeff: radius
             }],
+            brand: PhantomData,
         })
     }
 

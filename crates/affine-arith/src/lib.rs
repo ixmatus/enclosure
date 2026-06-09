@@ -21,14 +21,19 @@
 //! # Sharing a symbol source
 //!
 //! A noise symbol means the same uncertainty everywhere it appears, so two forms
-//! can be combined only when their symbols come from a common namespace. Every
-//! form that will be combined, and the [`SymbolSource`] passed to the operation,
-//! must originate from one source. Combining forms built from different sources
-//! is a logic error: their independent symbols would collide on the same id and
-//! be treated as correlated, which can silently break the enclosure guarantee
-//! (an `x - y` of unrelated forms could collapse toward zero) and violate the
-//! ordered-symbol invariant the operations rely on. This precondition is not yet
-//! enforced by the type system; honoring it is the caller's responsibility.
+//! can be combined only when their symbols come from a common namespace. Forms
+//! built from different sources have independent symbols that would collide on the
+//! same id and be treated as correlated, which would silently break the enclosure
+//! guarantee (an `x - y` of unrelated forms could collapse toward zero) and
+//! violate the ordered-symbol invariant the operations rely on.
+//!
+//! This precondition is enforced by the type system. A [`SymbolSource`] exists
+//! only inside a [`with_source`] scope and carries an invariant lifetime brand
+//! `'id`; every form built from it carries the same brand, and the operations
+//! require their operands and the source to share it. Two `with_source` scopes
+//! get distinct, incompatible brands, so the compiler refuses to combine forms
+//! from different sources. Branded forms cannot leave their scope; reduce a form
+//! to an [`interval_1788::Interval`] to return a result.
 //!
 //! # Status
 //!
@@ -55,4 +60,4 @@ mod ops;
 pub mod symbol;
 
 pub use form::{AffineForm, Term};
-pub use symbol::{NoiseSymbol, SymbolSource};
+pub use symbol::{with_source, NoiseSymbol, SymbolSource};

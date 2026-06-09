@@ -9,12 +9,12 @@ v1.0; before then the API may break between 0.x releases.
 ### Added
 
 - P1, the construction layer.
-  - `AffineForm<F>`, the affine form `x₀ + Σ xᵢ εᵢ` over a directed-rounding
+  - `AffineForm<'id, F>`, the affine form `x₀ + Σ xᵢ εᵢ` over a directed-rounding
     float, with its representation invariant (deviation terms sorted by symbol,
     no duplicates, no zero coefficients) held by construction.
-  - `NoiseSymbol` and `SymbolSource`: explicit, deterministic fresh-symbol
-    allocation, threaded into the operations that introduce symbols rather than
-    drawn from global state.
+  - `NoiseSymbol`, `SymbolSource`, and `with_source`: explicit, deterministic
+    fresh-symbol allocation, threaded into the operations that introduce symbols
+    rather than drawn from global state.
   - `AffineForm::point`, an exact form with no uncertainty.
   - `AffineForm::from_interval`, the construction of a form enclosing a bounded
     nonempty interval with one fresh symbol (`None` for the empty or unbounded
@@ -26,3 +26,21 @@ v1.0; before then the API may break between 0.x releases.
   - The `fixture` feature and a property lane over round-float's f64 instance:
     the interval-to-form-to-interval round-trip always encloses, point forms are
     exact, and fresh symbols are distinct.
+
+- P2, the arithmetic.
+  - `AffineForm::negate` (exact), `add`, `sub`, `scale`, and the rigor-critical
+    `mul`. Linear combinations add coefficients over shared symbols, so `x - x`
+    cancels; every rounding error and the multiply's bilinear remainder (bounded
+    by `radius(x)·radius(y)`) are folded outward into fresh symbols, so every
+    result encloses the true value set. The multiply was adversarially verified
+    sound (the algebra, the rounding directions, and edge cases) and exercised by
+    a property lane: each operation's reduction encloses the corner results, and
+    `x - x` collapses far below the doubled width interval arithmetic reports.
+
+- Source branding.
+  - `SymbolSource<'id>` and `AffineForm<'id, F>` carry an invariant lifetime
+    brand handed out by `with_source`. The operations require their operands and
+    the source to share the brand, so the compiler rejects combining forms built
+    from different sources, whose symbols would otherwise collide and break the
+    enclosure guarantee. The single-source precondition is enforced by the type
+    system rather than left to the caller.
