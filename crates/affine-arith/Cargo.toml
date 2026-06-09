@@ -1,14 +1,15 @@
 [package]
 name = "affine-arith"
-# Scaffold: the version stays at 0.0.0 until the affine form and its operations
-# land. publish = false until then.
-version = "0.0.0"
+# 0.1.0 is the construction layer (the form, the symbol source, the interval
+# round-trip). The arithmetic and elementary operations follow in 0.1.x; the API
+# may break between 0.x releases. publish = false until the operations land.
+version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Stolfi affine arithmetic over a directed-rounding float (scaffold; implementation in progress)."
+description = "Stolfi affine arithmetic over a directed-rounding float (construction layer; operations in progress)."
 keywords = ["affine-arithmetic", "interval", "rigorous", "no-std", "numerics"]
 categories = ["mathematics", "no-std", "science"]
 readme = "README.md"
@@ -22,9 +23,32 @@ publish = false
 round-float = { path = "../round-float" }
 interval-1788 = { path = "../interval-1788", default-features = false }
 
+[features]
+# The verification and host-test lane runs over round-float's f64 fixture (sound,
+# not tight), the same instance interval-1788 verifies on.
+fixture = ["round-float/f64"]
+
+[dev-dependencies]
+proptest = "1"
+
+# The property lanes exercise the f64 fixture instance.
+[[test]]
+name = "enclosure_fixture"
+required-features = ["fixture"]
+
+[[test]]
+name = "ops_fixture"
+required-features = ["fixture"]
+
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
+# Affine arithmetic uses short symbolic names (the sorted-merge indices and the
+# value/error pairs) and does deliberate float comparisons; let clippy not fight
+# the kernel's vocabulary.
+similar_names = "allow"
+float_cmp = "allow"
+many_single_char_names = "allow"
