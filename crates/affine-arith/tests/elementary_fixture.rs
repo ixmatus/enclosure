@@ -82,6 +82,28 @@ proptest! {
             prop_assert!(enc.contains(x.sqrt()), "sqrt lost sqrt({x}) over [{a}, {b}]");
         }
     }
+
+    /// The exponential of a finite range encloses `eˣ` everywhere on it.
+    #[test]
+    fn exp_encloses(a in -5.0f64..5.0, w in 0.0f64..5.0) {
+        let b = a + w;
+        let enc = with_source(|mut src| form_of(a, b, &mut src).exp(&mut src).unwrap().reduce());
+        for k in 0..=16 {
+            let x = a + (b - a) * (f64::from(k) / 16.0);
+            prop_assert!(enc.contains(x.exp()), "exp lost e^{x} over [{a}, {b}]");
+        }
+    }
+
+    /// The logarithm of a strictly positive range encloses `ln x` everywhere on it.
+    #[test]
+    fn ln_encloses(a in 1.0e-2f64..1.0e3, w in 0.0f64..1.0e3) {
+        let b = a + w;
+        let enc = with_source(|mut src| form_of(a, b, &mut src).ln(&mut src).unwrap().reduce());
+        for k in 0..=16 {
+            let x = a + (b - a) * (f64::from(k) / 16.0);
+            prop_assert!(enc.contains(x.ln()), "ln lost ln({x}) over [{a}, {b}]");
+        }
+    }
 }
 
 #[test]
@@ -118,6 +140,47 @@ fn sqrt_of_a_negative_part_is_none() {
 fn sqrt_of_the_zero_point_is_zero() {
     let enc = with_source(|mut src| AffineForm::point(0.0_f64).sqrt(&mut src).unwrap().reduce());
     assert!(enc.contains(0.0));
+}
+
+#[test]
+fn ln_of_a_nonpositive_range_is_none() {
+    let is_none = with_source(|mut src| {
+        let iv = Interval::new(-1.0_f64, 2.0).unwrap();
+        AffineForm::from_interval(&iv, &mut src)
+            .unwrap()
+            .ln(&mut src)
+            .is_none()
+    });
+    assert!(is_none);
+}
+
+#[test]
+fn exp_of_an_overflowing_range_is_none() {
+    let is_none = with_source(|mut src| {
+        let iv = Interval::new(700.0_f64, 800.0).unwrap();
+        AffineForm::from_interval(&iv, &mut src)
+            .unwrap()
+            .exp(&mut src)
+            .is_none()
+    });
+    assert!(is_none);
+}
+
+#[test]
+fn exp_of_a_point_is_the_exponential() {
+    let enc = with_source(|mut src| AffineForm::point(1.0_f64).exp(&mut src).unwrap().reduce());
+    assert!(enc.contains(std::f64::consts::E));
+}
+
+#[test]
+fn ln_of_a_point_is_the_logarithm() {
+    let enc = with_source(|mut src| {
+        AffineForm::point(std::f64::consts::E)
+            .ln(&mut src)
+            .unwrap()
+            .reduce()
+    });
+    assert!(enc.contains(1.0));
 }
 
 #[test]

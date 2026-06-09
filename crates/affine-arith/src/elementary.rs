@@ -30,7 +30,7 @@
 
 use alloc::vec::Vec;
 
-use round_float::RoundFloat;
+use round_float::{RoundFloat, RoundTranscendental};
 
 use crate::form::{AffineForm, Term};
 use crate::ops::{add_err, mul_err, push_fresh};
@@ -215,6 +215,98 @@ impl<'id, F: RoundFloat> AffineForm<'id, F> {
             .sqrt_down()
             .sub_down(alpha.mul_up(a))
             .rmin(b.sqrt_down().sub_down(alpha.mul_up(b)));
+        if !r_lo.is_finite() || !r_hi.is_finite() {
+            return None;
+        }
+        Some(self.linearize(alpha, r_lo, r_hi, src))
+    }
+}
+
+/// The transcendental elementary functions, available only when the backend
+/// provides [`RoundTranscendental`]. `recip`/`sqrt`/`sqr` need only the core
+/// [`RoundFloat`]; `exp`/`ln` additionally evaluate the function (and, at the
+/// interior tangent point, its inverse) with directed rounding, so they live on
+/// this stricter bound. A backend without sound transcendentals still gets the
+/// algebraic surface above.
+impl<'id, F: RoundFloat + RoundTranscendental> AffineForm<'id, F> {
+    /// The exponential `exp(x̂)`, by the Chebyshev affine approximation.
+    ///
+    /// `eˣ` is convex everywhere, so the residual `eˣ − α·x` is convex: its
+    /// maximum is the larger endpoint value and its minimum is the global value
+    /// `α·(1 − ln α)` at the interior tangent point `ln α` (a sound lower bound
+    /// over the range whatever rounding did to `α`). The secant slope is
+    /// `(eᵇ − eᵃ)/(b − a)`.
+    ///
+    /// Returns `None` when an endpoint is not finite or when `eᵇ` overflows: the
+    /// true result then exceeds the representable range, which a bounded affine
+    /// form cannot enclose. A range collapsed to a point fits the constant `eᶜ`.
+    #[must_use]
+    pub fn exp(&self, src: &mut SymbolSource<'id>) -> Option<Self> {
+        let iv = self.reduce();
+        let (a, b) = (iv.inf(), iv.sup());
+        if !a.is_finite() || !b.is_finite() {
+            return None;
+        }
+        let eb_hi = b.exp_up();
+        if !eb_hi.is_finite() {
+            // Overflow: the result is not a bounded affine form.
+            return None;
+        }
+        let width = b.sub_down(a);
+        if width <= F::ZERO {
+            // Degenerate range {c}: the constant fit eᶜ, slope zero.
+            return Some(self.linearize(F::ZERO, a.exp_down(), eb_hi, src));
+        }
+        // Secant slope α = (eᵇ − eᵃ)/(b − a) > 0.
+        let alpha = eb_hi.sub_up(a.exp_down()).div_up(width);
+        if !alpha.is_finite() || alpha <= F::ZERO {
+            return None;
+        }
+        // Global minimum of the convex residual, α·(1 − ln α) = α − α·ln α.
+        let r_lo = alpha.sub_down(alpha.mul_up(alpha.ln_up()));
+        // Maximum of the convex residual at an endpoint.
+        let r_hi = a
+            .exp_up()
+            .sub_up(alpha.mul_down(a))
+            .rmax(b.exp_up().sub_up(alpha.mul_down(b)));
+        if !r_lo.is_finite() || !r_hi.is_finite() {
+            return None;
+        }
+        Some(self.linearize(alpha, r_lo, r_hi, src))
+    }
+
+    /// The natural logarithm `ln(x̂)`, by the Chebyshev affine approximation.
+    ///
+    /// Returns `None` unless the whole range is in the domain (`a > 0`): a noise
+    /// symbol's range cannot be clamped to the positive part. `ln x` is concave,
+    /// so the residual `ln x − α·x` has its minimum at an endpoint and its maximum
+    /// `−(ln α + 1)` at the interior tangent point `1/α` (a sound upper bound over
+    /// the range). The secant slope is `(ln b − ln a)/(b − a)`. A range collapsed
+    /// to a point fits the constant `ln c`.
+    #[must_use]
+    pub fn ln(&self, src: &mut SymbolSource<'id>) -> Option<Self> {
+        let iv = self.reduce();
+        let (a, b) = (iv.inf(), iv.sup());
+        if !a.is_finite() || !b.is_finite() || a <= F::ZERO {
+            return None;
+        }
+        let width = b.sub_down(a);
+        if width <= F::ZERO {
+            // Degenerate range {c}: the constant fit ln c, slope zero.
+            return Some(self.linearize(F::ZERO, a.ln_down(), b.ln_up(), src));
+        }
+        // Secant slope α = (ln b − ln a)/(b − a) > 0.
+        let alpha = b.ln_up().sub_up(a.ln_down()).div_up(width);
+        if !alpha.is_finite() || alpha <= F::ZERO {
+            return None;
+        }
+        // Global maximum of the concave residual, −(ln α + 1) = −ln α − 1.
+        let r_hi = alpha.ln_down().negate().sub_up(F::ONE);
+        // Minimum of the concave residual at an endpoint.
+        let r_lo = a
+            .ln_down()
+            .sub_down(alpha.mul_up(a))
+            .rmin(b.ln_down().sub_down(alpha.mul_up(b)));
         if !r_lo.is_finite() || !r_hi.is_finite() {
             return None;
         }
