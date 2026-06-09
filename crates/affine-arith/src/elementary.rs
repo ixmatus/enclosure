@@ -109,4 +109,115 @@ impl<'id, F: RoundFloat> AffineForm<'id, F> {
 
         self.linearize(alpha, r_lo, r_hi, src)
     }
+
+    /// The reciprocal `1/x̂`, by the Chebyshev affine approximation.
+    ///
+    /// Returns `None` when the range is not sign stable (`0 ∈ [a, b]`, where the
+    /// true reciprocal is unbounded and no finite affine form can enclose it) or
+    /// when an endpoint, or the slope, is not finite (a range pressed against
+    /// zero whose reciprocal overflows). Unlike interval arithmetic, which can
+    /// answer such a divisor with an unbounded interval, an affine form is
+    /// bounded by construction, so the only sound answer is to decline.
+    ///
+    /// A negative range is handled by reflection: `1/x = −1/(−x)`, and negation
+    /// is exact, so the positive-range core does the work and the result is
+    /// negated back. (The reflection is sound for the symmetric Chebyshev fit; it
+    /// is the min-range slope choice, not this one, that the reflection would
+    /// trip up.)
+    #[must_use]
+    pub fn recip(&self, src: &mut SymbolSource<'id>) -> Option<Self> {
+        let iv = self.reduce();
+        let (a, b) = (iv.inf(), iv.sup());
+        if !a.is_finite() || !b.is_finite() {
+            return None;
+        }
+        if a > F::ZERO {
+            self.recip_positive(src)
+        } else if b < F::ZERO {
+            self.negate().recip_positive(src).map(|g| g.negate())
+        } else {
+            // Zero is in the range: 1/x is unbounded, not a finite affine form.
+            None
+        }
+    }
+
+    /// The reciprocal on a strictly positive range. The residual `1/x − α·x` is
+    /// convex there, so its maximum is the larger endpoint value and its minimum
+    /// is the parabola-like global minimum `2·√(−α)` at the interior tangent
+    /// point `√(ab)` (a sound lower bound over the range whatever rounding did to
+    /// `α`). The secant slope is `−1/(ab)`.
+    fn recip_positive(&self, src: &mut SymbolSource<'id>) -> Option<Self> {
+        let iv = self.reduce();
+        let (a, b) = (iv.inf(), iv.sup());
+        let ab = a.mul_down(b);
+        if !ab.is_finite() || ab <= F::ZERO {
+            return None;
+        }
+        let alpha = F::ONE.div_up(ab).negate();
+        if !alpha.is_finite() {
+            return None;
+        }
+        // Maximum of the convex residual at an endpoint, rounded up.
+        let r_hi = F::ONE
+            .div_up(a)
+            .sub_up(alpha.mul_down(a))
+            .rmax(F::ONE.div_up(b).sub_up(alpha.mul_down(b)));
+        // Global minimum 2·√(−α), rounded down via `s + s` (no inexact constant 2).
+        let s = alpha.negate().sqrt_down();
+        let r_lo = s.add_down(s);
+        if !r_lo.is_finite() || !r_hi.is_finite() {
+            return None;
+        }
+        Some(self.linearize(alpha, r_lo, r_hi, src))
+    }
+
+    /// The square root `√x̂`, by the Chebyshev affine approximation.
+    ///
+    /// Returns `None` unless the whole range is in the domain (`a ≥ 0`): a noise
+    /// symbol's range cannot be clamped to the nonnegative part the way interval
+    /// arithmetic restricts a domain, so a range dipping below zero has no sound
+    /// affine image. A range collapsed to `{0}` returns the point `0`.
+    ///
+    /// `√x` is concave on the positive reals, so the residual `√x − α·x` has its
+    /// minimum at an endpoint and its maximum `1/(4α)` at the interior tangent
+    /// point (a sound upper bound over the range). The secant slope is
+    /// `1/(√a + √b)`.
+    #[must_use]
+    pub fn sqrt(&self, src: &mut SymbolSource<'id>) -> Option<Self> {
+        let iv = self.reduce();
+        let (a, b) = (iv.inf(), iv.sup());
+        if !a.is_finite() || !b.is_finite() || a < F::ZERO {
+            return None;
+        }
+        if b.is_zero() {
+            // The range is {0}; √0 = 0, spending no symbol.
+            return Some(Self::point(F::ZERO));
+        }
+        // a >= 0, b > 0.
+        let den = a.sqrt_down().add_down(b.sqrt_down());
+        if !den.is_finite() || den <= F::ZERO {
+            return None;
+        }
+        let alpha = F::ONE.div_up(den);
+        if !alpha.is_finite() {
+            return None;
+        }
+        // Maximum of the concave residual, the interior value 1/(4α), rounded up:
+        // divide by a lower bound of 4α (built with add_down) so the quotient does
+        // not understate the bound.
+        let four_alpha = {
+            let t = alpha.add_down(alpha);
+            t.add_down(t)
+        };
+        let r_hi = F::ONE.div_up(four_alpha);
+        // Minimum of the concave residual at an endpoint, rounded down.
+        let r_lo = a
+            .sqrt_down()
+            .sub_down(alpha.mul_up(a))
+            .rmin(b.sqrt_down().sub_down(alpha.mul_up(b)));
+        if !r_lo.is_finite() || !r_hi.is_finite() {
+            return None;
+        }
+        Some(self.linearize(alpha, r_lo, r_hi, src))
+    }
 }
