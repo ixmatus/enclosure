@@ -24,7 +24,7 @@ use core::ops::{Add, Div, Mul, Neg, Sub};
 
 use crate::decoration::Decoration;
 use crate::interval::Interval;
-use crate::round::RoundFloat;
+use round_float::RoundFloat;
 
 /// Whether an interval is bounded and nonempty (so a continuous operation on it
 /// yields a bounded nonempty result, the precondition for `com`).

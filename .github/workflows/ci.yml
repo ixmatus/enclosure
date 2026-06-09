@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Formatting. The toolchain (stable 1.86 plus rustfmt) comes from
+  # rust-toolchain.toml, which rustup honors automatically on checkout.
+  fmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo fmt --all --check
+
+  # Lints and tests over the host, with every feature on so the verification
+  # fixtures (round-float/f64, interval-1788/fixture) are exercised.
+  clippy-test:
+    name: clippy + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - run: cargo test --workspace --all-features --locked
+
+  # The no_std cross-compile. Every crate builds for the embedded thumb targets
+  # (listed in rust-toolchain.toml so rustup installs them), bare and with each
+  # verification feature, to prove nothing pulled in std or alloc by accident.
+  no-std-cross:
+    name: no_std cross
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [thumbv6m-none-eabi, thumbv8m.main-none-eabi]
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo build -p round-float   --no-default-features                  --locked --target ${{ matrix.target }}
+      - run: cargo build -p round-float   --no-default-features --features f64    --locked --target ${{ matrix.target }}
+      - run: cargo build -p interval-1788 --no-default-features                  --locked --target ${{ matrix.target }}
+      - run: cargo build -p interval-1788 --no-default-features --features fixture --locked --target ${{ matrix.target }}
+      - run: cargo build -p affine-arith  --no-default-features                  --locked --target ${{ matrix.target }}
+
+  # Model checking. The discrete set-based case logic and the decoration lattice
+  # are discharged by Kani over the f64 fixture. cargo-kani brings its own
+  # toolchain, so the workspace 1.86 pin does not constrain it.
+  kani:
+    name: kani
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: model-checking/kani-github-action@v1
+        with:
+          args: "-p interval-1788 --features fixture"

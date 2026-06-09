@@ -1,0 +1,30 @@
+[package]
+name = "affine-arith"
+# Scaffold: the version stays at 0.0.0 until the affine form and its operations
+# land. publish = false until then.
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Stolfi affine arithmetic over a directed-rounding float (scaffold; implementation in progress)."
+keywords = ["affine-arithmetic", "interval", "rigorous", "no-std", "numerics"]
+categories = ["mathematics", "no-std", "science"]
+readme = "README.md"
+publish = false
+
+[dependencies]
+# The documented layering: affine-arith depends on interval-1788 (range
+# reduction, and the `Interval` an affine form reduces to) and on round-float
+# (the directed-rounding contract the form is generic over). interval-1788 is
+# pulled without default features so the affine crate stays no_std + alloc.
+round-float = { path = "../round-float" }
+interval-1788 = { path = "../interval-1788", default-features = false }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }

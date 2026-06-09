@@ -35,7 +35,7 @@
 use core::ops::{Add, Div, Mul, Neg, Sub};
 
 use crate::interval::Interval;
-use crate::round::RoundFloat;
+use round_float::RoundFloat;
 
 /// One corner of a product, rounded down, with the `0 * inf` indeterminate
 /// mapped to its interval value of zero.

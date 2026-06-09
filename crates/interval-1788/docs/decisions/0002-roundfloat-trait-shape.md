@@ -3,6 +3,11 @@
 **Status:** Accepted
 **Date:** 2026-06-07
 
+**Update (2026-06-08):** the deferred extraction described below is now executed.
+affine-arith became the second `RoundFloat` consumer, satisfying the condition
+this record set, and the trait moved to the `round-float` foundation crate.
+interval-1788 re-exports it. See the workspace record `enclosure` ADR-0001.
+
 ## Context
 
 The crate is generic over its float backend so the same interval logic serves

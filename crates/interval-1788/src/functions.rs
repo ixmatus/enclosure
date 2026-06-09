@@ -16,7 +16,7 @@
 //! deliberately rather than in passing.
 
 use crate::interval::Interval;
-use crate::round::RoundFloat;
+use round_float::RoundFloat;
 
 /// Absolute value of an endpoint. Exact (a sign flip or nothing); maps an
 /// infinite endpoint to positive infinity. Endpoints are never NaN.

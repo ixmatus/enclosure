@@ -1,0 +1,6 @@
+# The whole workspace is pinned to stable 1.86 (see rust-toolchain.toml). Tell
+# the resolver to prefer dependency versions compatible with that rust-version,
+# so the lockfile does not pin transitive crates that require a newer toolchain
+# than the family promises to build on.
+[resolver]
+incompatible-rust-versions = "fallback"

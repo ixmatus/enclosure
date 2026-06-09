@@ -11,7 +11,7 @@
 //! its constructors and observers.
 
 use crate::error::IntervalError;
-use crate::round::RoundFloat;
+use round_float::RoundFloat;
 
 /// The private representation. Keeping the variants and fields unreachable from
 /// outside the crate is what makes an invalid interval unrepresentable: the only
