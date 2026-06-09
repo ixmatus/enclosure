@@ -37,13 +37,15 @@
 //!
 //! # Status
 //!
-//! The construction layer (P1) and the arithmetic (P2): the [`AffineForm`] type,
-//! the noise-symbol [`SymbolSource`], the interval round-trip, and the operations
-//! [`negate`](AffineForm::negate), [`add`](AffineForm::add),
+//! The construction layer (the [`AffineForm`] type, the noise-symbol
+//! [`SymbolSource`], the interval round-trip), the arithmetic
+//! ([`negate`](AffineForm::negate), [`add`](AffineForm::add),
 //! [`sub`](AffineForm::sub), [`scale`](AffineForm::scale), and the rigor-critical
-//! [`mul`](AffineForm::mul). The nonlinear elementary functions and the
-//! enclosure-and-tightness verification lane arrive in later phases; the
-//! workspace decision records carry the plan.
+//! [`mul`](AffineForm::mul)), and the nonlinear elementary functions
+//! ([`recip`](AffineForm::recip), [`sqrt`](AffineForm::sqrt),
+//! [`sqr`](AffineForm::sqr), [`exp`](AffineForm::exp), and
+//! [`ln`](AffineForm::ln), by Chebyshev approximation) are in place. The API may
+//! break between 0.x releases; the workspace decision records carry the design.
 //!
 //! # No std
 //!
