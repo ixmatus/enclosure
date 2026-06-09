@@ -31,9 +31,13 @@ fixture = ["round-float/f64"]
 [dev-dependencies]
 proptest = "1"
 
-# The property lane exercises the f64 fixture instance.
+# The property lanes exercise the f64 fixture instance.
 [[test]]
 name = "enclosure_fixture"
+required-features = ["fixture"]
+
+[[test]]
+name = "ops_fixture"
 required-features = ["fixture"]
 
 [lints.rust]
@@ -42,7 +46,9 @@ missing_docs = "warn"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
-# Affine arithmetic uses short symbolic endpoint and coefficient names and does
-# deliberate float comparisons; let clippy not fight the kernel's vocabulary.
+# Affine arithmetic uses short symbolic names (the sorted-merge indices and the
+# value/error pairs) and does deliberate float comparisons; let clippy not fight
+# the kernel's vocabulary.
 similar_names = "allow"
 float_cmp = "allow"
+many_single_char_names = "allow"

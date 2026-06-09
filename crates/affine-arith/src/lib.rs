@@ -18,13 +18,27 @@
 //! directed-rounding contract `interval-1788` is built on, and a form is built
 //! from and reduces to an [`interval_1788::Interval`].
 //!
+//! # Sharing a symbol source
+//!
+//! A noise symbol means the same uncertainty everywhere it appears, so two forms
+//! can be combined only when their symbols come from a common namespace. Every
+//! form that will be combined, and the [`SymbolSource`] passed to the operation,
+//! must originate from one source. Combining forms built from different sources
+//! is a logic error: their independent symbols would collide on the same id and
+//! be treated as correlated, which can silently break the enclosure guarantee
+//! (an `x - y` of unrelated forms could collapse toward zero) and violate the
+//! ordered-symbol invariant the operations rely on. This precondition is not yet
+//! enforced by the type system; honoring it is the caller's responsibility.
+//!
 //! # Status
 //!
-//! This is the construction layer (P1): the [`AffineForm`] type, the noise-symbol
-//! [`SymbolSource`], the interval-to-form construction, and the reduction back to
-//! an interval. The arithmetic operations (the rigor-critical affine-by-affine
-//! multiply), the nonlinear elementary functions, and the verification lane
-//! arrive in later phases; the workspace decision records carry the plan.
+//! The construction layer (P1) and the arithmetic (P2): the [`AffineForm`] type,
+//! the noise-symbol [`SymbolSource`], the interval round-trip, and the operations
+//! [`negate`](AffineForm::negate), [`add`](AffineForm::add),
+//! [`sub`](AffineForm::sub), [`scale`](AffineForm::scale), and the rigor-critical
+//! [`mul`](AffineForm::mul). The nonlinear elementary functions and the
+//! enclosure-and-tightness verification lane arrive in later phases; the
+//! workspace decision records carry the plan.
 //!
 //! # No std
 //!
@@ -37,6 +51,7 @@
 extern crate alloc;
 
 pub mod form;
+mod ops;
 pub mod symbol;
 
 pub use form::{AffineForm, Term};

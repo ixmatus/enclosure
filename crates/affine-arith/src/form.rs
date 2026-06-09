@@ -16,6 +16,11 @@ pub struct Term<F> {
 }
 
 impl<F: Copy> Term<F> {
+    /// A term pairing a coefficient with a noise symbol.
+    pub(crate) fn new(symbol: NoiseSymbol, coeff: F) -> Self {
+        Self { symbol, coeff }
+    }
+
     /// The noise symbol this term varies with.
     #[must_use]
     pub fn symbol(&self) -> NoiseSymbol {
@@ -57,6 +62,14 @@ impl<F: RoundFloat> AffineForm<F> {
             center,
             terms: Vec::new(),
         }
+    }
+
+    /// Assemble a form from a center and an already-canonical term vector. The
+    /// caller (the operation modules) is responsible for the representation
+    /// invariant: terms sorted by ascending symbol, no duplicate symbol, no zero
+    /// coefficient.
+    pub(crate) fn from_parts(center: F, terms: Vec<Term<F>>) -> Self {
+        Self { center, terms }
     }
 
     /// An affine form enclosing a bounded, nonempty interval, introducing one
