@@ -1,9 +1,10 @@
 //! The `f64` instance of [`RoundFloat`]: a verification and host-test fixture.
 //!
 //! This instance is NOT a production interval float. It exists so the enclosure
-//! laws can be checked two ways the correctly-rounded backends cannot support:
-//! by CBMC under Kani (which models `f64` bit-precisely but cannot model a
-//! multiword decimal) and by host property tests with no heavy dependency.
+//! laws of the crates built on [`RoundFloat`] can be checked two ways the
+//! correctly-rounded backends cannot support: by CBMC under Kani (which models
+//! `f64` bit-precisely but cannot model a multiword decimal) and by host
+//! property tests with no heavy dependency.
 //!
 //! # Soundness without tightness
 //!
@@ -21,10 +22,11 @@
 //! `t` than `r`, contradicting `r` being nearest; symmetrically above.) So
 //! stepping outward is always a correct bound. It widens by up to one unit in
 //! the last place even when `r` was exact, which is the deliberate
-//! soundness-not-tightness trade of Law 6 in [`crate::spec`]. `sqrt` uses
-//! `libm::sqrt`, which is correctly rounded, then steps outward the same way.
+//! soundness-not-tightness trade described in the [crate docs](crate). `sqrt`
+//! uses `libm::sqrt`, which is correctly rounded, then steps outward the same
+//! way.
 
-use crate::round::RoundFloat;
+use crate::RoundFloat;
 
 impl RoundFloat for f64 {
     const INFINITY: Self = f64::INFINITY;

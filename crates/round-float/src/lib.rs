@@ -1,12 +1,12 @@
-//! [`RoundFloat`]: the directed-rounding float contract the interval layer is
-//! generic over.
+//! `round-float`: the directed-rounding float contract for rigorous numerics.
 //!
-//! This trait is the seam between `interval-1788` and any correctly-rounded
-//! floating-point backend. It is deliberately the common core of what rigorous
-//! inf-sup arithmetic needs and what pfloat-ball's `RealScalar` already
-//! exposes, so that a future `round-float` foundation crate can lift it
-//! verbatim and both enclosure crates can share one contract. See the
-//! `docs/decisions` records.
+//! [`RoundFloat`] is the seam between a correctly-rounded floating-point backend
+//! and the rigorous-enclosure crates built on top of it. The interval crate
+//! `interval-1788` and the affine-arithmetic crate `affine-arith` are both
+//! generic over it, so one backend (ferrodec `Decimal128`, pfloat's
+//! arbitrary-precision floats, or the `f64` fixture shipped here) serves every
+//! enclosure shape. The trait is deliberately the common core of what
+//! outward-rounded arithmetic needs, no larger.
 //!
 //! # Why split directions instead of a rounding-mode parameter
 //!
@@ -29,18 +29,35 @@
 //! guarantees soundness (the `f64` fixture) may return a looser bound, but never
 //! one on the wrong side. Soundness is the load-bearing obligation; tightness is
 //! a quality the backend may add.
+//!
+//! # The f64 instance
+//!
+//! Behind the `f64` feature, this crate provides a [`RoundFloat`] instance for
+//! `f64` that is sound but deliberately not tight: it computes each operation in
+//! round-to-nearest and steps the result one float outward with `next_down` /
+//! `next_up`. It exists so the enclosure laws can be machine-checked under Kani
+//! (which models `f64` bit-precisely, where it cannot model a multiword decimal)
+//! and exercised by host property tests, in both `interval-1788` and
+//! `affine-arith`, with no heavy dependency. A correctly-rounded backend makes
+//! the same operations tight; the fixture never does, by design.
+
+#![no_std]
+#![forbid(unsafe_code)]
+
+#[cfg(feature = "f64")]
+mod f64_impl;
 
 /// A floating-point type that supports the outward-directed arithmetic rigorous
-/// interval arithmetic is built on.
+/// enclosure methods are built on.
 ///
 /// `Self::INFINITY` and `Self::NEG_INFINITY` are the extended-real endpoints
-/// used to represent unbounded intervals. The predicates classify values during
+/// used to represent unbounded enclosures. The predicates classify values during
 /// construction and operation. See the [module docs](self) for the rounding
 /// contract every arithmetic method must honor.
 pub trait RoundFloat: Copy + PartialOrd {
-    /// Positive infinity, the upper endpoint of an interval unbounded above.
+    /// Positive infinity, the upper endpoint of a value unbounded above.
     const INFINITY: Self;
-    /// Negative infinity, the lower endpoint of an interval unbounded below.
+    /// Negative infinity, the lower endpoint of a value unbounded below.
     const NEG_INFINITY: Self;
     /// The additive identity (`+0`).
     const ZERO: Self;
@@ -92,8 +109,9 @@ pub trait RoundFloat: Copy + PartialOrd {
     /// The lesser of two non-NaN values.
     ///
     /// Used to reduce the four corners of a product or quotient to a lower
-    /// bound. Both arguments are non-NaN at every call site (interval endpoints
-    /// are non-NaN by construction), so the partial order is total here.
+    /// bound. Both arguments are non-NaN at every call site (the enclosure
+    /// endpoints are non-NaN by construction), so the partial order is total
+    /// here.
     #[must_use]
     fn rmin(self, rhs: Self) -> Self {
         if rhs < self {

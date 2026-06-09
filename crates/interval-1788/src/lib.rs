@@ -17,7 +17,8 @@
 //! - ferrodec `Decimal128` (the IEEE 754-2019 decimal float), via a newtype in
 //!   the consuming crate;
 //! - pfloat's arbitrary-precision floats, in pfloat's own repo;
-//! - an `f64` verification fixture, shipped here behind the `fixture` feature.
+//! - an `f64` verification fixture, from `round-float`, enabled here by the
+//!   `fixture` feature.
 //!
 //! Outward rounding (lower endpoint toward minus infinity, upper endpoint
 //! toward plus infinity) is the entire correctness story for arithmetic: when
@@ -26,14 +27,14 @@
 //!
 //! # The f64 fixture is sound, not tight
 //!
-//! The `fixture` `RoundFloat for f64` instance exists to make the enclosure
-//! theorem machine-checkable (CBMC models `f64` bit-precisely) and to drive
-//! host property tests. It rounds each result outward by one step with
-//! `next_up` / `next_down` unconditionally, so it is always a correct enclosure
-//! but is up to one unit in the last place wider than necessary. Tightness is a
-//! property of a correctly-rounded backend, verified there by property test,
-//! never by the fixture. See [`spec`] for the laws and the `docs/decisions`
-//! records for why the split exists.
+//! The `fixture` feature pulls `round-float`'s `RoundFloat for f64` instance,
+//! which exists to make the enclosure theorem machine-checkable (CBMC models
+//! `f64` bit-precisely) and to drive host property tests. It rounds each result
+//! outward by one step with `next_up` / `next_down` unconditionally, so it is
+//! always a correct enclosure but is up to one unit in the last place wider than
+//! necessary. Tightness is a property of a correctly-rounded backend, verified
+//! there by property test, never by the fixture. See [`spec`] for the laws and
+//! the `docs/decisions` records for why the split exists.
 //!
 //! # Scope
 //!
@@ -62,11 +63,7 @@ pub mod error;
 pub mod functions;
 pub mod interval;
 pub mod ops;
-pub mod round;
 pub mod spec;
-
-#[cfg(feature = "fixture")]
-mod f64_impl;
 
 #[cfg(all(kani, feature = "fixture"))]
 mod kani_harness;
@@ -75,4 +72,6 @@ pub use decorated::DecoratedInterval;
 pub use decoration::Decoration;
 pub use error::IntervalError;
 pub use interval::Interval;
-pub use round::RoundFloat;
+// Re-exported from the foundation crate so downstream `impl RoundFloat for _`
+// (the SMIL/ferrodec backend) keeps resolving `interval_1788::RoundFloat`.
+pub use round_float::RoundFloat;

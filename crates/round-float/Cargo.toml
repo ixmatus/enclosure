@@ -1,0 +1,37 @@
+[package]
+name = "round-float"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "The directed-rounding float contract for rigorous numerics: split-direction (down/up) arithmetic, generic and no_std."
+keywords = ["rounding", "interval", "rigorous", "no-std", "numerics"]
+categories = ["mathematics", "no-std", "science"]
+readme = "README.md"
+# Not published while the family is early and the consumers pin it by path. The
+# no-review posture (see README "How round-float is developed") is the
+# deliberate reason it is not on crates.io yet.
+publish = false
+
+[features]
+# The default is the bare trait, depending on nothing. The `f64` instance is a
+# verification and host-test FIXTURE, sound but not tight (outward `next_after`
+# widening, never under-rounding), shared by the enclosure crates' proof and
+# property lanes. `libm::sqrt` keeps it no_std-capable.
+f64 = ["dep:libm"]
+
+[dependencies]
+libm = { version = "0.2", default-features = false, optional = true }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# The directed-rounding trait methods return `Self`; their results are always
+# consumed into an endpoint at the call site. `#[must_use]` on each would be
+# noise on a low-level arithmetic contract.
+return_self_not_must_use = "allow"

@@ -1,17 +1,15 @@
 [package]
 name = "interval-1788"
 version = "0.1.0"
-edition = "2021"
-# Stable Rust. `f64::next_up` / `f64::next_down` (used only by the `fixture`
-# instance) stabilized in 1.86, which sets the floor; the core trait and type
-# need less. Pinned in `rust-toolchain.toml`; bumps are deliberate.
-rust-version = "1.86"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/ixmatus/interval-1788"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+# Now a member of the `enclosure` workspace; the repository points at the family.
+repository.workspace = true
 description = "Pure Rust rigorous interval arithmetic (IEEE 1788-2015, inf-sup), generic over a directed-rounding float."
 keywords = ["interval", "ieee-1788", "rigorous", "no_std", "verified"]
 categories = ["mathematics", "no-std", "science"]
-authors = ["Parnell Springmeyer <parnell@digitalmentat.com>"]
 readme = "README.md"
 # Not published while the SMIL consumer pins it by git and the crate is early.
 # The no-review posture (see README "How interval-1788 is developed") is the
@@ -19,17 +17,18 @@ readme = "README.md"
 publish = false
 
 [features]
-# The core (the `RoundFloat` trait and `Interval<F>`) is no_std and depends on
-# nothing. `std` only adds `std::error::Error` for `IntervalError`.
+# The core (the re-exported `RoundFloat` trait and `Interval<F>`) is no_std and
+# depends only on `round-float`. `std` only adds `std::error::Error` for
+# `IntervalError`.
 default = ["std"]
 std = []
 
-# The `f64` instance of `RoundFloat`. It is a verification and host-test
-# FIXTURE, not a production interval float: it trades tightness for
-# CBMC-checkability (sound `next_after` widening, never under-rounding). Tight
-# enclosure is a property of a correctly-rounded backend (ferrodec Decimal128,
-# pfloat), checked elsewhere. `libm::sqrt` keeps the fixture no_std-capable.
-fixture = ["dep:libm"]
+# The `f64` instance of `RoundFloat`, supplied by `round-float`'s `f64` feature.
+# It is a verification and host-test FIXTURE, not a production interval float: it
+# trades tightness for CBMC-checkability (sound `next_after` widening, never
+# under-rounding). Tight enclosure is a property of a correctly-rounded backend
+# (ferrodec Decimal128, pfloat), checked elsewhere.
+fixture = ["round-float/f64"]
 
 # Set by the Kani model checker via `--cfg kani`; declared so the
 # unexpected-cfgs lint stays quiet. The Kani harnesses run over the `fixture`
@@ -37,7 +36,7 @@ fixture = ["dep:libm"]
 kani = []
 
 [dependencies]
-libm = { version = "0.2", default-features = false, optional = true }
+round-float = { path = "../round-float" }
 
 [dev-dependencies]
 proptest = "1"

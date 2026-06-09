@@ -1,3 +1,17 @@
 [workspace]
 resolver = "2"
-members = ["crates/interval-1788"]
+members = ["crates/round-float", "crates/interval-1788"]
+
+# Shared package metadata. Each crate is independently VERSIONED and
+# independently PUBLISHABLE; only the fields that must stay uniform across the
+# family live here. The stable 1.86 floor is load-bearing: every crate must build
+# on stable so SMIL (stable) and any nightly consumer can both depend on the
+# family. `f64::next_up` / `f64::next_down`, used by round-float's directed f64
+# fixture, stabilized in 1.86 and set that floor; the core trait and types need
+# less. The thumb cross targets in rust-toolchain.toml prove the no_std build.
+[workspace.package]
+edition = "2021"
+rust-version = "1.86"
+license = "MIT OR Apache-2.0"
+authors = ["Parnell Springmeyer <parnell@digitalmentat.com>"]
+repository = "https://github.com/ixmatus/enclosure"

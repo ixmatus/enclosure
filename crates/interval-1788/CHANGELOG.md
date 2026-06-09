@@ -83,3 +83,13 @@ v1.0; before then the API may break between 0.x releases.
   - Property tests: decoration never strengthens through an operation, NaI poisons
     exactly when an input is NaI, every result is a consistent decorated pair, and
     the bare interval matches the undecorated operation.
+
+### Changed
+
+- `RoundFloat` moved to the new `round-float` foundation crate and is re-exported
+  here as `interval_1788::RoundFloat`, so downstream `impl RoundFloat for _`
+  (the SMIL/ferrodec backend) keeps compiling unchanged. The `fixture` feature
+  now pulls the f64 instance from `round-float`'s `f64` feature instead of
+  defining it locally. The crate joined the `enclosure` workspace; the repository
+  metadata points at the family. No behavior changed (66 unit and property tests
+  and 12 Kani proofs unchanged).
