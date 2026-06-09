@@ -173,10 +173,16 @@ impl<'id, F: RoundFloat> AffineForm<'id, F> {
 
     /// The square root `√x̂`, by the Chebyshev affine approximation.
     ///
-    /// Returns `None` unless the whole range is in the domain (`a ≥ 0`): a noise
-    /// symbol's range cannot be clamped to the nonnegative part the way interval
-    /// arithmetic restricts a domain, so a range dipping below zero has no sound
-    /// affine image. A range collapsed to `{0}` returns the point `0`.
+    /// Returns `None` unless the whole reduced range is in the domain (`a ≥ 0`): a
+    /// noise symbol's range cannot be clamped to the nonnegative part the way
+    /// interval arithmetic restricts a domain, so a range dipping below zero has no
+    /// sound affine image. Note this is the *reduced* range: a form built from a
+    /// zero-touching interval such as `[0, b]` reduces to a range whose lower end
+    /// has been rounded a hair below zero, so it too declines; only an exact point
+    /// `{0}` is special-cased to the point `0`. (Restricting to the nonnegative
+    /// part is sound but would let the linear extrapolation report a negative lower
+    /// bound on a square root, which is worse than declining; a tighter
+    /// zero-touching path is left as a later refinement.)
     ///
     /// `√x` is concave on the positive reals, so the residual `√x − α·x` has its
     /// minimum at an endpoint and its maximum `1/(4α)` at the interior tangent

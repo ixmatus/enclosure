@@ -10,7 +10,7 @@
 //! Each test does its affine work inside a `with_source` scope and returns the
 //! brand-free reduced interval for the assertions to inspect.
 
-use affine_arith::{with_source, AffineForm, SymbolSource};
+use affine_arith::{with_source, AffineForm, SymbolSource, Term};
 use interval_1788::Interval;
 use proptest::prelude::*;
 
@@ -71,10 +71,12 @@ proptest! {
         }
     }
 
-    /// The square root of a nonnegative range encloses `√x` everywhere on it,
-    /// including the infinite-derivative corner at `a = 0`.
+    /// The square root of a strictly positive range encloses `√x` everywhere on
+    /// it. The lower bound stays above `1e-2` so the outward-rounded reduced inf
+    /// does not dip below zero (which would make `sqrt` decline); the
+    /// zero-touching decline is pinned by its own regression test.
     #[test]
-    fn sqrt_encloses(a in 0.0f64..1.0e3, w in 0.0f64..1.0e3) {
+    fn sqrt_encloses(a in 1.0e-2f64..1.0e3, w in 0.0f64..1.0e3) {
         let b = a + w;
         let enc = with_source(|mut src| form_of(a, b, &mut src).sqrt(&mut src).unwrap().reduce());
         for k in 0..=16 {
@@ -200,4 +202,93 @@ fn sqr_straddling_zero_pins_the_nonnegative_image() {
     });
     assert!(sq.contains(0.0) && sq.contains(4.0) && sq.contains(9.0));
     assert!((sq.sup() - sq.inf()) < (prod.sup() - prod.inf()));
+}
+
+#[test]
+fn sqrt_of_a_zero_touching_range_declines() {
+    // from_interval([0, b]) rounds its reduced inf a hair below zero, so the whole
+    // reduced range is not in the domain and sqrt declines (the conservative
+    // choice; see the sqrt doc comment). Only an exact point {0} is special-cased.
+    let is_none = with_source(|mut src| {
+        let iv = Interval::new(0.0_f64, 4.0).unwrap();
+        AffineForm::from_interval(&iv, &mut src)
+            .unwrap()
+            .sqrt(&mut src)
+            .is_none()
+    });
+    assert!(is_none);
+}
+
+#[test]
+fn recip_negative_wide_ratio_encloses_at_the_tangent() {
+    // A wide negative range, probed at the interior tangent x = -sqrt(ab) where the
+    // 2*sqrt(-alpha) lower bound binds hardest, plus the endpoints.
+    let (a, b) = (-1.0e6_f64, -1.0);
+    let enc = with_source(|mut src| form_of(a, b, &mut src).recip(&mut src).unwrap().reduce());
+    let tangent = -(a * b).sqrt(); // in [a, b]
+    assert!(
+        enc.contains(1.0 / tangent),
+        "recip lost 1/{tangent} at the tangent"
+    );
+    assert!(enc.contains(1.0 / a) && enc.contains(1.0 / b));
+}
+
+/// Multi-symbol enclosure: build a two-input form (plus the build roundoff
+/// symbols) over a strictly positive range, then check every elementary function
+/// encloses the true value at a sweep of joint noise-symbol assignments, corners
+/// included. This exercises `linearize`'s per-coefficient loop, which the
+/// single-symbol tests above never reach.
+#[test]
+#[allow(clippy::cast_precision_loss)] // the xorshift bits fit f64's mantissa exactly
+fn multi_symbol_enclosure_over_positive_forms() {
+    // Deterministic xorshift for reproducible range and assignment generation.
+    let mut state = 0x9E37_79B9_7F4A_7C15_u64;
+    let mut unit = || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        (state >> 11) as f64 / ((1u64 << 53) as f64) // [0, 1)
+    };
+
+    for _ in 0..1500 {
+        let (c0, r0) = (1.0 + unit() * 8.0, unit() * 0.4);
+        let (c1, r1) = (1.0 + unit() * 8.0, unit() * 0.4);
+        let scale1 = 0.2 + unit() * 0.6;
+
+        let (center, coeffs, sqr, recip, sqrt, exp, ln) = with_source(|mut src| {
+            let f0 = form_of(c0 - r0, c0 + r0, &mut src);
+            let f1 = form_of(c1 - r1, c1 + r1, &mut src);
+            let combined = f0.add(&f1.scale(scale1, &mut src), &mut src);
+            let center = combined.center();
+            let coeffs: Vec<f64> = combined.terms().iter().map(Term::coeff).collect();
+            (
+                center,
+                coeffs,
+                combined.sqr(&mut src).reduce(),
+                combined.recip(&mut src).unwrap().reduce(),
+                combined.sqrt(&mut src).unwrap().reduce(),
+                combined.exp(&mut src).unwrap().reduce(),
+                combined.ln(&mut src).unwrap().reduce(),
+            )
+        });
+
+        for iter in 0..18 {
+            let mut x = center;
+            for &k in &coeffs {
+                let eps = match iter {
+                    0 => 1.0,
+                    1 => -1.0,
+                    _ => 2.0 * unit() - 1.0,
+                };
+                x += k * eps;
+            }
+            // x is in the form's reduced range, which stays positive, so every
+            // function is in-domain and must enclose the true value.
+            assert!(sqr.contains(x * x), "sqr lost {x}^2");
+            assert!(recip.contains(1.0 / x), "recip lost 1/{x}");
+            assert!(sqrt.contains(x.sqrt()), "sqrt lost sqrt({x})");
+            assert!(exp.contains(x.exp()), "exp lost e^{x}");
+            assert!(ln.contains(x.ln()), "ln lost ln({x})");
+        }
+    }
 }
