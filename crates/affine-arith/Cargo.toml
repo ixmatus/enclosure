@@ -21,3 +21,10 @@ publish = false
 # pulled without default features so the affine crate stays no_std + alloc.
 round-float = { path = "../round-float" }
 interval-1788 = { path = "../interval-1788", default-features = false }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
