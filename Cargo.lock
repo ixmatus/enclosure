@@ -4,9 +4,10 @@ version = 4
 
 [[package]]
 name = "affine-arith"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "interval-1788",
+ "proptest",
  "round-float",
 ]
 
