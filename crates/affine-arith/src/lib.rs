@@ -55,6 +55,7 @@
 
 extern crate alloc;
 
+mod elementary;
 pub mod form;
 mod ops;
 pub mod symbol;
