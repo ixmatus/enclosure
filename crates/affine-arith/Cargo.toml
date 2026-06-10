@@ -48,6 +48,10 @@ required-features = ["fixture"]
 name = "persistent_fixture"
 required-features = ["fixture"]
 
+[[test]]
+name = "condense_fixture"
+required-features = ["fixture"]
+
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"

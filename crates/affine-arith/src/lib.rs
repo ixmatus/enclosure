@@ -57,6 +57,7 @@
 
 extern crate alloc;
 
+mod condense;
 mod elementary;
 pub mod form;
 mod ops;
