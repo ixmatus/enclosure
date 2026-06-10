@@ -119,3 +119,46 @@ fn affine_ln_encloses_correct_rounding() {
         a *= 2.7;
     }
 }
+
+#[test]
+fn interval_exp_encloses_correct_rounding() {
+    // The interval exp's endpoints must bracket the correctly-rounded image:
+    // for [a, b], exp([a, b]).inf() <= exp_down-oracle(x) and the oracle's
+    // upper bound stays below exp([a, b]).sup(), at every sampled x.
+    let mut a = -50.0_f64;
+    while a <= 50.0 {
+        let b = a + 0.5;
+        let enc = Interval::new(a, b).unwrap().exp();
+        for k in 0..=8 {
+            let x = a + (b - a) * (f64::from(k) / 8.0);
+            let (lo, hi) = exp_bracket(x);
+            assert!(
+                enc.inf() <= lo && hi <= enc.sup(),
+                "interval exp over [{a}, {b}] lost e^{x}: enc = [{}, {}], oracle = [{lo}, {hi}]",
+                enc.inf(),
+                enc.sup()
+            );
+        }
+        a += 1.31;
+    }
+}
+
+#[test]
+fn interval_ln_encloses_correct_rounding() {
+    let mut a = 1.0e-3_f64;
+    while a <= 1.0e6 {
+        let b = a * 1.5;
+        let enc = Interval::new(a, b).unwrap().ln();
+        for k in 0..=8 {
+            let x = a + (b - a) * (f64::from(k) / 8.0);
+            let (lo, hi) = ln_bracket(x);
+            assert!(
+                enc.inf() <= lo && hi <= enc.sup(),
+                "interval ln over [{a}, {b}] lost ln({x}): enc = [{}, {}], oracle = [{lo}, {hi}]",
+                enc.inf(),
+                enc.sup()
+            );
+        }
+        a *= 2.7;
+    }
+}

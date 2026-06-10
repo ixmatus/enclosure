@@ -39,6 +39,14 @@ impl NoiseSymbol {
     pub fn id(self) -> u64 {
         self.0
     }
+
+    /// A symbol from a raw identifier. Crate-internal: the public path to a
+    /// symbol is [`SymbolSource::fresh`], and the public path to a form carrying
+    /// reconstructed symbols is `AffineForm::from_raw_parts`, which owns the
+    /// validation a raw id needs.
+    pub(crate) fn from_raw(id: u64) -> Self {
+        Self(id)
+    }
 }
 
 /// A source of fresh noise symbols, branded with the lifetime `'id` of the
@@ -71,6 +79,73 @@ impl SymbolSource<'_> {
             .checked_add(1)
             .expect("noise-symbol id space exhausted");
         symbol
+    }
+
+    /// The id the next [`fresh`](SymbolSource::fresh) call will return.
+    ///
+    /// Exposed for callers that persist an unscoped source across sessions (see
+    /// [`SymbolSource::unscoped`]): saving this value alongside the forms that
+    /// reference the source's symbols, and restoring it with
+    /// [`unscoped_at`](SymbolSource::unscoped_at), keeps freshness intact.
+    #[must_use]
+    pub fn next_id(&self) -> u64 {
+        self.next
+    }
+}
+
+impl SymbolSource<'static> {
+    /// An unscoped source: the escape hatch from the [`with_source`] brand for
+    /// callers that need forms to live indefinitely (for example a calculator
+    /// stack whose values persist across operations).
+    ///
+    /// The returned source and every form built from it carry the `'static`
+    /// brand. All `'static` brands unify, so **the compiler no longer rejects
+    /// mixing forms from two unscoped sources** — the soundness obligation the
+    /// brand normally discharges moves to the caller as an invariant:
+    ///
+    /// **One unscoped source per universe of values.** Every long-lived form
+    /// that can ever be combined with another must mint its symbols from the
+    /// same unscoped source. Combining forms from two unscoped sources collides
+    /// their independent symbols and silently breaks the enclosure guarantee,
+    /// exactly the failure [`with_source`] makes unrepresentable.
+    ///
+    /// Two further obligations follow for callers that persist forms:
+    ///
+    /// - **Persist the counter with the values.** Save [`next_id`] atomically
+    ///   with every form referencing the source's symbols and restore them
+    ///   together via [`unscoped_at`](SymbolSource::unscoped_at). Restoring an
+    ///   older counter while newer forms survive would let `fresh` re-issue a
+    ///   live id.
+    /// - **Reset by relabeling.** To restart the counter, first strip or
+    ///   relabel the symbols of every live form (reduce each to its interval
+    ///   and rebuild). Relabeling forgets correlation, which only widens future
+    ///   combinations; it never breaks enclosure.
+    ///
+    /// [`with_source`] remains the canonical API; reach for this only when a
+    /// scope cannot outlive the values it would brand. See the workspace
+    /// decision record on the unscoped source.
+    ///
+    /// [`next_id`]: SymbolSource::next_id
+    #[must_use]
+    pub fn unscoped() -> Self {
+        Self::unscoped_at(0)
+    }
+
+    /// An unscoped source that resumes issuing ids at `next`.
+    ///
+    /// The restore half of the persistence contract on
+    /// [`unscoped`](SymbolSource::unscoped): `next` must be a value previously
+    /// observed from [`next_id`](SymbolSource::next_id) of the same logical
+    /// source, at or after the moment every surviving form's symbols were
+    /// minted. A `next` lower than a surviving form's greatest symbol id lets
+    /// `fresh` alias a live symbol, which silently breaks the enclosure
+    /// guarantee.
+    #[must_use]
+    pub fn unscoped_at(next: u64) -> Self {
+        Self {
+            next,
+            brand: PhantomData,
+        }
     }
 }
 

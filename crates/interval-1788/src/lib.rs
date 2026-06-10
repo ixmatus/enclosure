@@ -38,11 +38,20 @@
 //!
 //! # Scope
 //!
-//! This is an early version. The roadmap is the full set-based flavor (the
-//! forward operation set, the numeric and boolean functions, set operations,
-//! the `{com, dac, def, trv, ill}` decoration system, and Level 2 conformance).
-//! What is implemented at any version is stated per module; behavior that is
-//! designed but not yet present is named as such rather than implied.
+//! This is an early version. Implemented today: the construction layer
+//! ([`Interval`], the empty set, unbounded intervals); the total forward
+//! arithmetic (`+ - * /`, negation, `recip`, `sqr`, `sqrt`, `mul_add`, with
+//! the four-corner product); the numeric, boolean, and set functions of
+//! [`functions`] (`wid`/`mag`/`mig`, `subset`/`interior`/`disjoint`,
+//! `intersection`/`convex_hull`); the `{com, dac, def, trv, ill}` decoration
+//! system on [`DecoratedInterval`]; and the first elementary functions
+//! ([`exp`](Interval::exp) and [`ln`](Interval::ln), behind the
+//! [`RoundTranscendental`] extension trait). Not yet present, and named
+//! rather than implied: the rest of the elementary set (the trigonometric
+//! and hyperbolic functions, `pow`), reverse operations, `mid`/`rad` and the
+//! ordering relations, Level 2 (text I/O, the datum model), and conformance
+//! against the ITF1788 vector suite. The roadmap is the full set-based
+//! flavor; what is implemented at any version is stated per module.
 //!
 //! # No std
 //!
@@ -59,6 +68,7 @@ extern crate std;
 
 pub mod decorated;
 pub mod decoration;
+pub mod elementary;
 pub mod error;
 pub mod functions;
 pub mod interval;
@@ -73,5 +83,6 @@ pub use decoration::Decoration;
 pub use error::IntervalError;
 pub use interval::Interval;
 // Re-exported from the foundation crate so downstream `impl RoundFloat for _`
-// (the SMIL/ferrodec backend) keeps resolving `interval_1788::RoundFloat`.
-pub use round_float::RoundFloat;
+// (the SMIL/ferrodec backend) keeps resolving `interval_1788::RoundFloat`, and
+// likewise the extension trait the elementary functions are gated on.
+pub use round_float::{RoundFloat, RoundTranscendental};

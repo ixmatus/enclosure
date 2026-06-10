@@ -8,7 +8,11 @@ authors.workspace = true
 # Now a member of the `enclosure` workspace; the repository points at the family.
 repository.workspace = true
 description = "Pure Rust rigorous interval arithmetic (IEEE 1788-2015, inf-sup), generic over a directed-rounding float."
-keywords = ["interval", "ieee-1788", "rigorous", "no_std", "verified"]
+# "verified" was deliberately dropped from the keywords: Kani discharges the
+# discrete set-based logic and the decoration lattice, but the numeric enclosure
+# rests on the spec laws and property tests, and a keyword cannot carry that
+# nuance honestly.
+keywords = ["interval", "ieee-1788", "rigorous", "no_std", "enclosure"]
 categories = ["mathematics", "no-std", "science"]
 readme = "README.md"
 # Not published while the SMIL consumer pins it by git and the crate is early.
@@ -30,11 +34,6 @@ std = []
 # (ferrodec Decimal128, pfloat), checked elsewhere.
 fixture = ["round-float/f64"]
 
-# Set by the Kani model checker via `--cfg kani`; declared so the
-# unexpected-cfgs lint stays quiet. The Kani harnesses run over the `fixture`
-# f64 instance.
-kani = []
-
 [dependencies]
 round-float = { path = "../round-float" }
 
@@ -52,6 +51,10 @@ required-features = ["fixture"]
 
 [[test]]
 name = "decorated_fixture"
+required-features = ["fixture"]
+
+[[test]]
+name = "elementary_fixture"
 required-features = ["fixture"]
 
 [lints.rust]
