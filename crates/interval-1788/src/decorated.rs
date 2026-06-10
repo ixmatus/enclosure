@@ -167,6 +167,40 @@ impl<F: RoundFloat> DecoratedInterval<F> {
     }
 }
 
+impl<F: RoundFloat + round_float::RoundTranscendental> DecoratedInterval<F> {
+    /// Exponential, decorated. Defined and continuous on the whole line, so
+    /// the decoration only demotes for an unbounded input — or an unbounded
+    /// result: `exp` overflows a bounded input to `[lo, +inf]` well within the
+    /// finite range, and `com` promises a bounded result, so an overflow
+    /// demotes to `dac`.
+    #[must_use]
+    pub fn exp(self) -> Self {
+        if self.is_nai() {
+            return Self::nai();
+        }
+        let result = self.x.exp();
+        let dloc = local(
+            !self.x.is_empty(),
+            bounded_nonempty(self.x) && result.is_bounded(),
+        );
+        Self::pack(result, self.d.meet(dloc))
+    }
+
+    /// Natural logarithm, decorated. Undefined where the interval reaches zero
+    /// or below; the image of an input touching zero is unbounded below, which
+    /// also demotes `com` to `dac`.
+    #[must_use]
+    pub fn ln(self) -> Self {
+        if self.is_nai() {
+            return Self::nai();
+        }
+        let result = self.x.ln();
+        let dom = !self.x.is_empty() && self.x.inf() > F::ZERO;
+        let dloc = local(dom, bounded_nonempty(self.x) && result.is_bounded());
+        Self::pack(result, self.d.meet(dloc))
+    }
+}
+
 impl<F: RoundFloat> Neg for DecoratedInterval<F> {
     type Output = Self;
 
@@ -309,6 +343,57 @@ mod tests {
         let r = di(1.0, 2.0) / di(0.0, 0.0);
         assert_eq!(r.decoration(), Decoration::Trv);
         assert!(r.interval().is_empty());
+    }
+
+    #[test]
+    fn exp_of_bounded_stays_com() {
+        let r = di(0.0, 1.0).exp();
+        assert_eq!(r.decoration(), Decoration::Com);
+        assert!(r.interval().contains(1.0));
+    }
+
+    #[test]
+    fn exp_overflow_demotes_to_dac() {
+        // exp is defined and continuous everywhere, but the result escapes the
+        // finite range, and com promises a bounded result.
+        let r = di(0.0, 1.0e3).exp();
+        assert_eq!(r.decoration(), Decoration::Dac);
+        assert_eq!(r.interval().sup(), f64::INFINITY);
+    }
+
+    #[test]
+    fn exp_propagates_nai() {
+        assert!(DecoratedInterval::<f64>::nai().exp().is_nai());
+    }
+
+    #[test]
+    fn ln_of_positive_bounded_stays_com() {
+        let r = di(1.0, core::f64::consts::E).ln();
+        assert_eq!(r.decoration(), Decoration::Com);
+        assert!(r.interval().contains(0.5));
+    }
+
+    #[test]
+    fn ln_reaching_zero_drops_to_trv() {
+        // Zero is outside ln's domain, so the restriction is a domain
+        // violation (trv), and the bare interval is the enclosure of the
+        // defined part.
+        let r = di(0.0, 1.0).ln();
+        assert_eq!(r.decoration(), Decoration::Trv);
+        assert_eq!(r.interval().inf(), f64::NEG_INFINITY);
+        assert!(r.interval().contains(0.0));
+    }
+
+    #[test]
+    fn ln_wholly_nonpositive_is_trv_empty() {
+        let r = di(-2.0, -1.0).ln();
+        assert_eq!(r.decoration(), Decoration::Trv);
+        assert!(r.interval().is_empty());
+    }
+
+    #[test]
+    fn ln_propagates_nai() {
+        assert!(DecoratedInterval::<f64>::nai().ln().is_nai());
     }
 
     #[test]

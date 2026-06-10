@@ -8,6 +8,17 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Added
 
+- Phase E opener, the first elementary functions.
+  - `exp` and `ln` on `Interval<F>` and `DecoratedInterval<F>`, behind
+    `F: RoundFloat + RoundTranscendental` (the extension trait, re-exported
+    beside `RoundFloat`). Monotone endpoint images with outward rounding;
+    `ln` domain-restricted to `(0, +inf)` per the set-based flavor; the
+    decorated versions demote `com` to `dac` when the result is unbounded
+    (overflow, or an input touching `ln`'s domain edge). Decision record 0004.
+  - Property lane `tests/elementary_fixture.rs` (pointwise enclosure over the
+    f64 fixture) and oracle certification against pfloat-libm's
+    correctly-rounded values in the workspace's nightly lane.
+
 - Phase A, the construction layer.
   - `RoundFloat`, the directed-rounding float contract the interval layer is
     generic over (split-direction methods, extended-real constants, and the

@@ -59,6 +59,7 @@ extern crate std;
 
 pub mod decorated;
 pub mod decoration;
+pub mod elementary;
 pub mod error;
 pub mod functions;
 pub mod interval;
@@ -73,5 +74,6 @@ pub use decoration::Decoration;
 pub use error::IntervalError;
 pub use interval::Interval;
 // Re-exported from the foundation crate so downstream `impl RoundFloat for _`
-// (the SMIL/ferrodec backend) keeps resolving `interval_1788::RoundFloat`.
-pub use round_float::RoundFloat;
+// (the SMIL/ferrodec backend) keeps resolving `interval_1788::RoundFloat`, and
+// likewise the extension trait the elementary functions are gated on.
+pub use round_float::{RoundFloat, RoundTranscendental};
