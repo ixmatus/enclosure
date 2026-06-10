@@ -208,3 +208,41 @@ impl<'id, F: RoundFloat> AffineForm<'id, F> {
         Interval::new(lo, hi).unwrap_or_else(|_| Interval::entire())
     }
 }
+
+impl<F: RoundFloat> AffineForm<'static, F> {
+    /// The deserialization companion of [`center`](AffineForm::center) and
+    /// [`terms`](AffineForm::terms): rebuild a previously serialized form from
+    /// its raw `(symbol id, coefficient)` pairs.
+    ///
+    /// Only `'static` (unscoped-source) forms can be rebuilt this way, so the
+    /// branded world of [`with_source`](crate::with_source) stays airtight: a
+    /// reconstructed form can only ever combine with forms from an unscoped
+    /// source, and the caller owns the unscoped-source invariants (one source
+    /// per universe; the source's counter restored past every id given here —
+    /// see [`SymbolSource::unscoped`](crate::SymbolSource::unscoped)).
+    ///
+    /// Returns `None` when the input is not a faithful serialization of a form:
+    /// a non-finite center or coefficient, or ids not strictly ascending (the
+    /// order [`terms`](AffineForm::terms) guarantees). Zero coefficients are
+    /// dropped, matching the representation invariant.
+    pub fn from_raw_parts(
+        center: F,
+        raw_terms: impl IntoIterator<Item = (u64, F)>,
+    ) -> Option<Self> {
+        if !center.is_finite() {
+            return None;
+        }
+        let mut terms: Vec<Term<F>> = Vec::new();
+        let mut previous: Option<u64> = None;
+        for (id, coeff) in raw_terms {
+            if previous.is_some_and(|p| p >= id) || !coeff.is_finite() {
+                return None;
+            }
+            previous = Some(id);
+            if !coeff.is_zero() {
+                terms.push(Term::new(NoiseSymbol::from_raw(id), coeff));
+            }
+        }
+        Some(Self::from_parts(center, terms))
+    }
+}

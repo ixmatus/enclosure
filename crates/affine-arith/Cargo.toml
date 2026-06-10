@@ -44,6 +44,10 @@ required-features = ["fixture"]
 name = "elementary_fixture"
 required-features = ["fixture"]
 
+[[test]]
+name = "persistent_fixture"
+required-features = ["fixture"]
+
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
