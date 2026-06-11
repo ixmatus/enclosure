@@ -75,3 +75,15 @@ fits a scope.
 - ADR-0001 (the layering and the brand's original rationale); the SMIL
   calculator's decision log (ADR-0055 there) for the consumer-side surface.
 - Tests: `crates/affine-arith/tests/persistent_fixture.rs`.
+
+### Registry pointers (added 2026-06-11, registry slice enc-my9)
+
+- The design is original to this workspace (a typestate escape hatch, not an
+  inherited construction); the affine form semantics the persisted
+  representation carries are the Stolfi line's, registry entries
+  `docs/references/figueiredo-stolfi-2004.md` and
+  `docs/references/comba-stolfi-1993.md`.
+- The kernel map (`docs/references/kernel-map.md`) carries this ADR's row,
+  and the failure mode named above is restated in the registry's verification
+  map so the absent compile-time guarantee is visible where the proofs are
+  inventoried.
