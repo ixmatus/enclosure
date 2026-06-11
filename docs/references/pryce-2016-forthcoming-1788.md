@@ -7,8 +7,8 @@ citation: >-
   LNCS 9553, Springer, 2016, pp. 23-39.
 canonical-url: https://link.springer.com/chapter/10.1007/978-3-319-31769-4_3
 doi: 10.1007/978-3-319-31769-4_3
-archived-url: none yet (save owed; accessible mirror is the working group copy at grouper.ieee.org/groups/1788/email/pdfUQ6axaQZDw.pdf)
-archive-date: none yet
+archived-url: https://web.archive.org/web/20181125132024/http://grouper.ieee.org/groups/1788/email/pdfUQ6axaQZDw.pdf
+archive-date: 2018-11-25
 retrieved: 2026-06-11
 license: Crossref records CC BY-NC 2.5 for the version of record; the Springer page itself presents as paywalled
 vendor-status: pointer-only
@@ -38,6 +38,6 @@ records CC BY-NC 2.5 for the version of record, which is unusual for an LNCS
 chapter, while the Springer landing page behaves as paywalled (redirects
 through an authorization endpoint). The working group's own mailing list copy
 on grouper.ieee.org is the accessible mirror; grouper.ieee.org has been
-decommissioning for years, so that copy is itself rot risky and a Wayback save
-attempt is owed (saves were rate limited on 2026-06-11; no snapshot of the
-grouper PDF was confirmed this session).
+decommissioning for years, so that copy is rot risky and the 2018-11-25
+Wayback snapshot above is the hedge (a fresh save was rate limited on
+2026-06-11).
