@@ -64,6 +64,16 @@ jobs:
         with:
           args: "-p interval-1788 --features fixture"
 
+  # The reference registry. Structural validation only (frontmatter completeness,
+  # INDEX sync, vendored hashes); no network calls, so it cannot flake on a dead
+  # link. Archived-URL liveness is a human check at write time.
+  references:
+    name: reference registry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/check_references.py
+
   # The transcendental oracle lane. `elementary-oracle` is workspace-excluded and
   # depends on pfloat (a correctly-rounded libm that needs nightly for
   # `feature(generic_const_exprs)`), so it runs on its own pinned nightly in a
