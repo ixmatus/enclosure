@@ -71,3 +71,34 @@ surfaced this is why the pinned property is the pointwise one.
 - `crates/affine-arith/src/condense.rs`; tests in
   `crates/affine-arith/tests/condense_fixture.rs`.
 - ADR-0003 (the unscoped source the persistent consumer pairs this with).
+
+### Literature cross-map (added 2026-06-11, registry slice enc-my9)
+
+The registry at `docs/references/` maps this decision into the published
+design space; the decision itself is unchanged.
+
+- An affine form with `n` deviation terms is a zonotope with `n` generators,
+  so this ADR's fold is a zonotope order reduction. The fold of the smallest
+  terms into one symbol bounding their summed magnitude corresponds to the
+  interval-hull style reduction of the AA literature
+  (`docs/references/figueiredo-stolfi-2004.md`); the reachability community's
+  baselines are Girard's box fold
+  (`docs/references/girard-2005-zonotope-reachability.md`) and Combastel's
+  weighted selection (`docs/references/combastel-2003.md`).
+- The systematic comparisons
+  (`docs/references/kopetzki-schurmann-althoff-2017.md`,
+  `docs/references/yang-scott-2018.md`) measure when each heuristic wins and,
+  more usefully here, come with computable bounds on the width inflation a
+  reduction causes. Surfacing such a bound from `condense` is the natural
+  upgrade if the downstream degradation witness work (SMIL bead smil-dgv4)
+  wants it.
+- The fixed-memory alternative to periodic folding is Messine's AF1/AF2
+  accumulator forms (`docs/references/messine-2002-extensions-affine.md`):
+  new error routes into persistent accumulator terms so named correlations
+  never face cap pressure. A larger redesign than a fold upgrade; recorded as
+  the second rung.
+- The roads not taken upward: quadratic forms
+  (`docs/references/messine-touhami-2006.md`) and Taylor models
+  (`docs/references/makino-berz-2003-taylor-models.md`), both heavier than a
+  `no_std` bounded form wants. Rigorous-FP implementation practicalities for
+  any of this: `docs/references/rump-kashiwagi-2015.md`.
