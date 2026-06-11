@@ -59,4 +59,4 @@ crate READMEs name exactly this in their "What this does not promise" sections.
 |---|---|---|
 | Law 2 in full generality (every input, every backend) | `crates/interval-1788/src/spec.rs` | CBMC explosion on bit stepping; a future Creusot/Prusti attempt is open |
 | The 1788 exception to decoration mapping | `spec.rs` prose | small closed mapping, enum exhaustiveness already guards the shape |
-| ITF1788 conformance | none yet | the vector suite is not yet wired; see [itf1788-framework](itf1788-framework.md) coverage notes and the roadmap bead |
+| ITF1788 conformance | none yet (corpus vendored, lane not wired) | see [itf1788-framework](itf1788-framework.md) for the coverage gaps and the disclosure reconciliation: the vectors, once wired, still cannot retire the READMEs' named failure modes |

@@ -96,6 +96,28 @@ arithmetic libraries, including their IEEE-1788 compliance", arXiv:2205.11837
 important aspect of our libraries fit in these frameworks" (snapshot
 web.archive.org/web/20260214173238/https://arxiv.org/abs/2205.11837).
 
+## Reconciliation with the README disclosures (2026-06-11)
+
+The three crate READMEs each name, under "What this does not promise", a
+failure mode of the shape "a bound or enclosure wrong on an input no proof or
+test reached". The coverage analysis above confirms the vector suite cannot
+retire those disclosures: the vectors are point samples with inherited
+sampling bias, they grade tightest results at fixed inputs rather than
+establishing behavior across a domain, and they exercise one Level 2 type.
+Wiring the suite in (the roadmap conformance lane) will strengthen the
+evidence and should not soften the disclosure text. No contradiction between
+the disclosures and the vector reality was found.
+
+One precision flag, for a future README revision rather than an edit now: the
+interval-1788 README's verification paragraph plans to run "the IEEE 1788
+conformance test vectors and differential tests against a trusted reference"
+out of process to keep copyleft out of the link graph. The copyleft concern
+attaches to the GPL oracle implementations
+([octave-interval-heimlich](octave-interval-heimlich.md)), not to the vector
+data, whose per file licenses (Apache-2.0, LGPL-2.1-or-later, all-permissive)
+permit the in repo carriage this registry now does. The sentence bundles the
+two; they have different license postures.
+
 ## Provenance and rot notes
 
 The technical report URL the README cites

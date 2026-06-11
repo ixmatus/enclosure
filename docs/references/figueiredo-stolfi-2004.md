@@ -48,7 +48,7 @@ sha256 ffa46b8a1f59c0dc3aa5cfa7ec2302b46678c6ee617a99b310dde530b75d0717.
 Invited talk slides (slides, not the paper) at `lhf.impa.br/ftp/oral/aa.pdf`
 (snapshot 2025-03-23, web.archive.org/web/20250323142834). De Figueiredo's
 publications index at `lhf.impa.br/publications.html` carries the
-authoritative citation text and has no Wayback snapshot at all; a save is owed
-and tracked in the close out report. The deeper companion is the 1997 monograph
+authoritative citation text; it had no Wayback snapshot at all until the
+fresh 2026-06-11 save (web.archive.org/web/20260611083947), its first ever. The deeper companion is the 1997 monograph
 ([stolfi-figueiredo-1997](stolfi-figueiredo-1997.md)); the project hub is
 [stolfi-affine-arith-project](stolfi-affine-arith-project.md).
