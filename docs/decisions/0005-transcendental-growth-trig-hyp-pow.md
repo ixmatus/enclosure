@@ -1,6 +1,9 @@
-# ADR-DRAFT; Transcendental growth: per-family capability traits, reduction-aware margins, and the critical-point rule
+# ADR-0005: Transcendental growth: per-family capability traits, reduction-aware margins, and the critical-point rule
 
-**Status:** draft. Promotes the design-sensitive half of beads `enc-34n` (the per-function arms are the implementing half, deliberately mechanical after this record). Builds on round-float ADR-0001 (the `RoundTranscendental` extension trait), enclosure ADR-0002 (affine Chebyshev elementary functions), and the elementary-oracle lane. Gates the SMIL `enclosed-sin` family.
+**Status:** Accepted
+**Date:** 2026-07-11
+
+This record promotes the design-sensitive half of beads `enc-34n` (the per-function arms are the implementing half, deliberately mechanical after this record). Builds on round-float ADR-0001 (the `RoundTranscendental` extension trait), enclosure ADR-0002 (affine Chebyshev elementary functions), and the elementary-oracle lane. Gates the SMIL `enclosed-sin` family.
 
 ## Context
 
