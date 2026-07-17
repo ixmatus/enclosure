@@ -4,10 +4,9 @@
 //! These functions require capabilities beyond the core [`RoundFloat`]: the
 //! trigonometric arms ride [`RoundTrig`] (which carries the pi enclosure and an
 //! exact `floor` for argument reduction), the hyperbolic arms ride
-//! [`RoundHyperbolic`], `pow` rides [`RoundTranscendental`] (it is the exp/ln
-//! composition), and `rootn` rides [`RoundPow`]. A backend supplies each family
-//! on its own schedule; everything else about the interval type is unaffected.
-//! See workspace decision record 0005.
+//! [`RoundHyperbolic`], and `pow` and `rootn` ride [`RoundPow`]. A backend
+//! supplies each family on its own schedule; everything else about the interval
+//! type is unaffected. See workspace decision record 0005.
 //!
 //! # The critical-point rule (sin, cos, tan)
 //!
@@ -36,18 +35,22 @@
 //! branch, `[tan_down(a), tan_up(b)]`. The decoration transitions follow the
 //! ITF1788 `libieeep1788_elem.itl` `tan` vectors.
 //!
-//! # pow as the exp/ln composition
+//! # pow by monotonicity, four-corner style
 //!
-//! `pow(X, Y)` is the set `{ x^y : x in X, x >= 0, y in Y }`. On the positive
-//! base part this equals `exp(Y * ln(X))` (each factor computed by the sound
-//! interval `exp`, `ln`, and four-corner product already in the crate), the
-//! frugal v1 realization ADR-0005 records. The base's zero column is folded in
-//! separately: `0^y = 0` is defined only for `y > 0`, so a base reaching zero
-//! admits `0` into the image exactly when the exponent has a strictly positive
-//! part. A negative base is outside the real domain and drops out.
+//! `pow(X, Y)` is the set `{ x^y : x in X, x >= 0, y in Y }` (the exp/ln
+//! composition is the AFFINE seam of ADR-0005 part 4, not this arm; part 3 fixes
+//! the interval arm as monotone decomposition through the backend's directed
+//! `pow`). On the positive-base region `x^y` is monotone in each argument for
+//! each fixed value of the other, so the image extremes sit at corners of the
+//! box and the four-corner reduction computes them; see
+//! [`pow`](Interval::pow) for the derived sign-case table. The base's zero
+//! column is folded in separately: `0^y = 0` is defined only for `y > 0`, so a
+//! base reaching zero admits `0` into the image exactly when the exponent has a
+//! strictly positive part. A negative base is outside the real domain and drops
+//! out.
 
 use crate::interval::Interval;
-use round_float::{RoundFloat, RoundHyperbolic, RoundPow, RoundTranscendental, RoundTrig};
+use round_float::{RoundFloat, RoundHyperbolic, RoundPow, RoundTrig};
 
 /// Whether the arithmetic grid `base + m*step` has a point whose sound enclosure
 /// intersects `[a, b]`.
@@ -318,21 +321,45 @@ impl<F: RoundFloat + RoundHyperbolic> Interval<F> {
     }
 }
 
-impl<F: RoundFloat + RoundTranscendental> Interval<F> {
+impl<F: RoundFloat + RoundPow> Interval<F> {
     /// The power, the set `{ x^y : x in self, x >= 0, y in exponent }`.
     ///
     /// IEEE 1788's `pow` restricts the base to the nonnegative reals; a base
     /// reaching below zero has that part dropped, and a base entirely below zero
-    /// has the empty image. The positive base part is `exp(exponent * ln(self))`
-    /// (the frugal v1 composition of ADR-0005); a base reaching zero admits the
-    /// value `0` (from `0^y = 0`) exactly when the exponent has a strictly
-    /// positive part, since `0^y` is defined only for `y > 0`.
+    /// has the empty image.
+    ///
+    /// # The sign-case monotonicity table, and why four corners subsume it
+    ///
+    /// On the positive-base region the partial derivatives fix the monotonicity
+    /// in each argument: `d/dx (x^y) = y * x^(y-1)`, so `x^y` increases in `x`
+    /// for `y > 0`, decreases for `y < 0`, and is constant (`= 1`) at `y = 0`;
+    /// `d/dy (x^y) = x^y * ln(x)`, so it increases in `y` for `x > 1`, decreases
+    /// for `x < 1`, and is constant at `x = 1`. A function monotone in each
+    /// argument for each fixed value of the other attains its extremes over a
+    /// box at corners (fix `y`: the extreme moves to an `x` edge; move along
+    /// that edge in `y`: it lands on a corner). Spelled out per sign case over
+    /// `[xl, xh] x [yl, yh]`, the minimum sits at `(xl, yl)` when
+    /// `yl >= 0, xl >= 1`, at `(xl, yh)` when `yl >= 0, xl < 1`, at `(xh, yl)`
+    /// when `yh <= 0, xh > 1`, at `(xh, yh)` when `yh <= 0, xh <= 1`, and at the
+    /// smaller of the two half-case corners when `y` straddles zero; the maximum
+    /// table mirrors it. Evaluating all four `pow_down` corners under `rmin`
+    /// (and `pow_up` under `rmax`) computes exactly those selections without
+    /// dispatching on the cases, the same four-corner reduction multiplication
+    /// uses, immune to a case-selection slip by construction.
+    ///
+    /// A base endpoint at or below zero enters the corners as `+0`, whose
+    /// backend `pow` values are the limits of `x^y` as `x -> 0+` (zero for
+    /// `y > 0`, unbounded above for `y < 0`, one at `y = 0`), so the open
+    /// boundary of the domain-restricted set stays enclosed. The value `0`
+    /// itself (from `0^y = 0`, defined only for `y > 0`) joins the image exactly
+    /// when the base reaches zero and the exponent has a strictly positive part
+    /// (`0^0` and `0^negative` are undefined and contribute nothing).
     #[must_use]
     pub fn pow(self, exponent: Self) -> Self {
         let Some((xl, xh)) = self.bounds() else {
             return Self::empty();
         };
-        let Some((_yl, yh)) = exponent.bounds() else {
+        let Some((yl, yh)) = exponent.bounds() else {
             return Self::empty();
         };
         let zero = F::ZERO;
@@ -340,22 +367,43 @@ impl<F: RoundFloat + RoundTranscendental> Interval<F> {
             // Base entirely negative: outside the real power domain.
             return Self::empty();
         }
-        // Positive base part. `ln` restricts to (0, +inf) and reaches -inf as the
-        // base approaches zero, so it drops any nonpositive base part on its own.
-        let comp = (exponent * self.ln()).exp();
-        // Zero column: 0^y = 0 is defined only for y > 0, so admit 0 into the image
-        // exactly when the exponent reaches strictly above zero and the base
-        // reaches zero.
-        if xl <= zero && yh > zero {
-            let hi = if comp.is_empty() { zero } else { comp.sup() };
+        // Whether 0^y contributes the value 0 (base reaches zero, exponent has a
+        // strictly positive part).
+        let zero_column = xl <= zero && yh > zero;
+        if xh <= zero {
+            // The base's positive part is empty (the base is the zero singleton,
+            // up to zero signs): only the zero column can contribute.
+            return if zero_column {
+                Self::hull(zero, zero)
+            } else {
+                Self::empty()
+            };
+        }
+        // The positive base part is [pxl, xh] with pxl normalized to +0 when the
+        // base reaches zero or below (-0 included), so the corners the backend
+        // evaluates at zero are the x -> 0+ limits, never the -0 special cases.
+        let pxl = if xl <= zero { zero } else { xl };
+        let lo = pxl
+            .pow_down(yl)
+            .rmin(pxl.pow_down(yh))
+            .rmin(xh.pow_down(yl))
+            .rmin(xh.pow_down(yh))
+            // Range clamp: x^y > 0 on the positive base part and the x -> 0+
+            // limits are at least 0, so a loose backend's widening below zero is
+            // clamped back (a theorem about the range, always sound).
+            .rmax(zero);
+        let hi = pxl
+            .pow_up(yl)
+            .rmax(pxl.pow_up(yh))
+            .rmax(xh.pow_up(yl))
+            .rmax(xh.pow_up(yh));
+        if zero_column {
             Self::hull(zero, hi)
         } else {
-            comp
+            Self::hull(lo, hi)
         }
     }
-}
 
-impl<F: RoundFloat + RoundPow> Interval<F> {
     /// The `n`-th root, the set `{ x^(1/n) : x in self, in domain }`.
     ///
     /// Splits on the parity of `n`: an odd root is defined and increasing on the
@@ -521,7 +569,7 @@ impl<F: RoundFloat + RoundHyperbolic> DecoratedInterval<F> {
     }
 }
 
-impl<F: RoundFloat + RoundTranscendental> DecoratedInterval<F> {
+impl<F: RoundFloat + RoundPow> DecoratedInterval<F> {
     /// Power, decorated. The power is defined and continuous on `base > 0` (all
     /// exponents) and at `base == 0` for `exponent > 0`; it grades `trv` when the
     /// input box reaches a base below zero, or reaches base zero with an exponent

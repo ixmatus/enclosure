@@ -10,18 +10,19 @@ v1.0; before then the API may break between 0.x releases.
 
 - The transcendental growth arms on `Interval<F>` and `DecoratedInterval<F>`, in a
   new `trig` module: `sin`, `cos`, `tan` (behind `F: RoundFloat + RoundTrig`),
-  `sinh`, `cosh`, `tanh` (behind `F: RoundFloat + RoundHyperbolic`), `pow` (behind
-  `F: RoundFloat + RoundTranscendental`), and `rootn` (behind
-  `F: RoundFloat + RoundPow`); the three new extension traits are re-exported
-  beside `RoundFloat`. `sin`/`cos` follow the critical-point rule of decision
-  record 0005: an input spanning a full period (or unbounded) maps to `[-1, 1]`,
-  and otherwise the maxima and minima are admitted by testing whether a grid
-  point's sound enclosure (from the pi bracket and a directed index) meets the
+  `sinh`, `cosh`, `tanh` (behind `F: RoundFloat + RoundHyperbolic`), and `pow` and
+  `rootn` (behind `F: RoundFloat + RoundPow`); the three new extension traits are
+  re-exported beside `RoundFloat`. `sin`/`cos` follow the critical-point rule of
+  decision record 0005: an input spanning a full period (or unbounded) maps to
+  `[-1, 1]`, and otherwise the maxima and minima are admitted by testing whether a
+  grid point's sound enclosure (from the pi bracket and a directed index) meets the
   input, so ambiguity widens toward the extremum and never guesses. `tan` returns
   `Entire` when a pole enclosure may lie inside and the monotone branch otherwise.
-  `pow(X, Y)` is the exp/ln composition `exp(Y * ln(X))` on the nonnegative base
-  domain, with the base's zero column (`0^y = 0`, defined only for `y > 0`) folded
-  in; `rootn` splits on the parity of `n`. The decorated forms grade `com`/`dac`
+  `pow(X, Y)` decomposes by monotonicity in each argument, four-corner style
+  through the backend's directed `pow` on the nonnegative base domain (decision
+  record 0005 part 3; the exp/ln composition is the affine seam of part 4, not
+  this arm), with the base's zero column (`0^y = 0`, defined only for `y > 0`)
+  folded in; `rootn` splits on the parity of `n`. The decorated forms grade `com`/`dac`
   by boundedness for the everywhere-continuous families, `trv` where `tan` hits a
   pole or `pow`/`rootn` violates its base domain. Test lane
   `tests/trig_pow_fixture.rs` transcribes the ITF1788 `libieeep1788_elem.itl` and

@@ -55,8 +55,8 @@
 //! [`cancel_plus`](Interval::cancel_plus), which recover an interval after a
 //! known addition and always grade `trv`); and the transcendental growth arms of
 //! [`trig`] (`sin`, `cos`, `tan` behind [`RoundTrig`]; `sinh`, `cosh`, `tanh`
-//! behind [`RoundHyperbolic`]; `pow` behind [`RoundTranscendental`]; `rootn`
-//! behind [`RoundPow`]). Not yet present, and named rather than implied: the
+//! behind [`RoundHyperbolic`]; `pow` and `rootn` behind [`RoundPow`]). Not yet
+//! present, and named rather than implied: the
 //! remaining elementary functions (the inverse trigonometric and hyperbolic
 //! functions, `pown`), reverse operations, `mid`/`rad` and the
 //! ordering relations, Level 2 (text I/O, the datum model), and conformance

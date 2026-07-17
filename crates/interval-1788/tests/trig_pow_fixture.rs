@@ -441,6 +441,33 @@ proptest! {
         prop_assert!(r.contains(x.powf(y)), "{x}^{y} escaped [{}, {}]", r.inf(), r.sup());
     }
 
+    /// The four-corner `pow` arm is never wider than the exp/ln composition
+    /// `exp(Y * ln(X))` it replaced: on a strictly positive base both are sound
+    /// enclosures of the same image, the composition pays extra rounding through
+    /// `ln`, the product, and `exp`, and the direct arm pays one widening, so the
+    /// direct result must be a subset (per the ADR-0005 part 3 rework; the
+    /// composition was part 4's affine seam, misread as the interval arm).
+    #[test]
+    fn pow_four_corner_within_composition(
+        xl in 1.0e-3f64..3.0,
+        xw in 0.0f64..3.0,
+        yl in -4.0f64..4.0,
+        yw in 0.0f64..4.0,
+    ) {
+        let base = iv(xl, xl + xw);
+        let exponent = iv(yl, yl + yw);
+        let direct = base.pow(exponent);
+        let composed = (exponent * base.ln()).exp();
+        prop_assert!(
+            composed.inf() <= direct.inf() && direct.sup() <= composed.sup(),
+            "four-corner [{}, {}] wider than composition [{}, {}]",
+            direct.inf(),
+            direct.sup(),
+            composed.inf(),
+            composed.sup()
+        );
+    }
+
     /// rootn pointwise enclosure across the parity split.
     #[test]
     fn rootn_encloses_pointwise(
