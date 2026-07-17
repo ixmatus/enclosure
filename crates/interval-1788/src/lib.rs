@@ -87,6 +87,8 @@ pub mod interval;
 pub mod ops;
 pub mod point;
 pub mod spec;
+#[cfg(feature = "fixture")]
+pub mod text_io;
 
 #[cfg(all(kani, feature = "fixture"))]
 mod kani_harness;

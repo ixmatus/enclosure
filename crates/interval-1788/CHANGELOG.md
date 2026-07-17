@@ -8,6 +8,47 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Added
 
+- The text I/O surface, `interval-1788`'s Level 1 literal grammar for `f64`
+  (ledger item 8), behind the `fixture` feature and with its threat model named
+  in the module doc: the input is attacker-supplied bytes, and the worst it can
+  force is a `TextError` value or a sound enclosing interval, never a panic,
+  unbounded work, an allocation, or an unsound interval.
+  - `nums_to_interval` (the checked endpoint constructor's standard spelling) and
+    `text_to_interval` on `Interval<f64>` and `DecoratedInterval<f64>`, parsing
+    the bracketed forms (`[empty]`, `[entire]`, `[l, u]`, the half-open and point
+    forms, `[nai]`), the uncertain form (`m?`, `m?r`, one-sided `u`/`d`, the
+    infinite-radius `??`, with a trailing exponent), and decimal, hex-float, and
+    rational `p/q` number literals, with whitespace tolerance and case folding.
+    The decoration suffixes `_com`/`_dac`/`_def`/`_trv` are validated against the
+    literal's mathematical interval and combined with the stored interval's
+    strongest decoration by the lattice meet, so an overflowing literal demotes a
+    requested `com` to `dac`; `_ill` is reserved for `[nai]`.
+  - The rigor-critical core is a directed decimal-to-`f64` conversion. Every
+    finite literal reduces to a signed ratio of integers, and an allocation-free
+    fixed-capacity big integer rounds it to the directed endpoint by exact long
+    division: the lower endpoint toward minus infinity, the upper toward plus
+    infinity, tightest, with the exactness decision made entirely in integer
+    arithmetic (no floating point in the comparison). Hex literals are exact by
+    construction through the same division with a power-of-two denominator. Work
+    is bounded by three named length caps; over-length input is a `TextError`.
+  - Output: a `Display` for `Interval<f64>` (`intervalToText`, whose reread
+    encloses) and the exact pair `interval_to_exact` / `exact_to_interval` (clause
+    13.4), which round-trips any interval bit-for-bit through its hex-float text.
+    The output side has zero corpus coverage (registry gap 2), so its correctness
+    rests on the round-trip properties in the test lane, which the module doc
+    records as the substitute for the missing vectors.
+  - The failures the standard raises as the `UndefinedOperation` signal are
+    reported as `Result::Err` instead (a documented divergence); a
+    `PossiblyUndefinedOperation` case is a valid `Ok` result. The `[nai]` literal
+    is the returned `NaI` value.
+  - `tests/text_io_fixture.rs`: the constructor, exception, and class
+    `textToInterval`/`numsToInterval` vectors transcribed (valid, malformed,
+    decorated, hex, and uncertain), the exceptions-file signals mapped to `Err`,
+    plus property lanes: the exact hex round-trip, `Display` reread enclosure, the
+    directed decimal core bracketing the correctly-rounded `str::parse` oracle to
+    one ulp (including at the subnormal and overflow edges), and a no-panic lane
+    over random ASCII bytes.
+
 - The numeric and boolean function completion (the Phase C deferrals).
   - Numeric `mid`, `rad`, and `mid_rad` on `Interval<F>`, each `Option` (`None`
     for the empty interval). `mid_rad` is the core; `mid` and `rad` project it, so
