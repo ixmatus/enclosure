@@ -44,3 +44,17 @@ v1.0; before then the API may break between 0.x releases.
     from different sources, whose symbols would otherwise collide and break the
     enclosure guarantee. The single-source precondition is enforced by the type
     system rather than left to the caller.
+
+- P4, the verification lane.
+  - A composition lane property-tests enclosure over whole random expression
+    programs, sampling the input symbols at the binding corners and at interiors
+    and arbitrating any containment failure against interval-1788 point
+    intervals, so oracle noise is separated from a confirmed bug.
+  - A tightness lane pins the per-expression win ratio against interval
+    arithmetic on a catalogue of correlated expressions, each with a width
+    property over random ranges, and documents the uncorrelated multiply as a
+    non-goal where interval arithmetic is tighter.
+  - Kani harnesses discharge the discrete skeleton (symbol freshness,
+    `from_raw_parts` validation, the addition merge shape, condensation counts);
+    the numeric enclosure stays with the property lanes, per interval-1788
+    ADR-0003, and a `compile_fail` doctest guards the cross-source brand.

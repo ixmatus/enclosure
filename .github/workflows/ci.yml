@@ -63,6 +63,10 @@ jobs:
       - uses: model-checking/kani-github-action@v1
         with:
           args: "-p interval-1788 --features fixture"
+      # affine-arith's discrete skeleton (symbol freshness, from_raw_parts, merge shape, condensation counts).
+      - uses: model-checking/kani-github-action@v1
+        with:
+          args: "-p affine-arith --features fixture"
 
   # The reference registry. Structural validation only (frontmatter completeness,
   # INDEX sync, vendored hashes); no network calls, so it cannot flake on a dead

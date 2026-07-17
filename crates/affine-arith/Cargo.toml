@@ -52,9 +52,20 @@ required-features = ["fixture"]
 name = "condense_fixture"
 required-features = ["fixture"]
 
+[[test]]
+name = "composition_fixture"
+required-features = ["fixture"]
+
+[[test]]
+name = "tightness_fixture"
+required-features = ["fixture"]
+
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
+# The Kani harnesses (src/kani_harness.rs) are gated on `cfg(kani)`, set only by
+# cargo-kani. Declaring the cfg keeps a plain `cargo check` from warning on it.
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
