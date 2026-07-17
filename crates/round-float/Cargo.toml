@@ -35,6 +35,12 @@ libm = { version = "0.2", default-features = false, optional = true }
 [dev-dependencies]
 # The tight backend's property and adjacency lanes; matches the sibling crates.
 proptest = "1"
+# The independent exact reference for the reduction property lane: pure Rust,
+# stable, arbitrary precision (the workspace's canonical MPFR replacement). It
+# computes the exact sum and dot at a precision wide enough to be exact for the
+# bounded test vectors, and the tight results are checked to be its correctly
+# rounded value. Test-only; the shipped crate never depends on it.
+astro-float = { version = "0.9", default-features = false, features = ["std"] }
 
 # The adjacency invariant, exactness detection, and the fixture envelope.
 [[test]]
@@ -46,9 +52,24 @@ required-features = ["f64-tight", "f64"]
 name = "tight_oracle"
 required-features = ["f64-tight", "f64"]
 
+# The 15 hand-translated ITF1788 reduction conformance vectors over TightF64.
+[[test]]
+name = "reduction_conformance"
+required-features = ["f64-tight"]
+
+# The astro-float exact-reference property lane and the oracle-free
+# mode-consistency properties for the Kulisch reductions.
+[[test]]
+name = "reduction_oracle"
+required-features = ["f64-tight"]
+
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
+# The Kani proofs in `src/kulisch.rs` are gated on `cfg(kani)`, a cfg cargo-kani
+# sets and a plain `cargo build` does not. Declaring it keeps the unexpected_cfgs
+# lint quiet, matching the sibling crates.
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
