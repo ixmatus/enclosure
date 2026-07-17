@@ -455,26 +455,26 @@ impl<F: RoundFloat> DecoratedInterval<F> {
 
 impl<F: RoundFloat + round_float::RoundTranscendental> DecoratedInterval<F> {
     /// Exponential, decorated. Defined and continuous on the whole line, so
-    /// the decoration only demotes for an unbounded input — or an unbounded
-    /// result: `exp` overflows a bounded input to `[lo, +inf]` well within the
+    /// the decoration only demotes for an unbounded input or an unbounded
+    /// result. `exp` overflows a bounded input to `[lo, +inf]` well within the
     /// finite range, and `com` promises a bounded result, so an overflow
-    /// demotes to `dac`.
+    /// demotes to `dac` at the `pack` seam.
     #[must_use]
     pub fn exp(self) -> Self {
         if self.is_nai() {
             return Self::nai();
         }
         let result = self.x.exp();
-        let dloc = local(
-            !self.x.is_empty(),
-            bounded_nonempty(self.x) && result.is_bounded(),
-        );
+        let dloc = local(!self.x.is_empty(), bounded_nonempty(self.x));
         Self::pack(result, self.d.meet(dloc))
     }
 
-    /// Natural logarithm, decorated. Undefined where the interval reaches zero
-    /// or below; the image of an input touching zero is unbounded below, which
-    /// also demotes `com` to `dac`.
+    /// Natural logarithm, decorated. Undefined at or below zero: an interval
+    /// whose infimum is not strictly positive fails the domain check, so `dom`
+    /// is false and the local decoration is `trv`. On a strictly positive input
+    /// `ln` is defined and continuous, and a bounded positive input maps to a
+    /// bounded image, so `ln` has no overflow demotion path; the decoration
+    /// demotes to `dac` only for an unbounded input.
     #[must_use]
     pub fn ln(self) -> Self {
         if self.is_nai() {
@@ -482,7 +482,7 @@ impl<F: RoundFloat + round_float::RoundTranscendental> DecoratedInterval<F> {
         }
         let result = self.x.ln();
         let dom = !self.x.is_empty() && self.x.inf() > F::ZERO;
-        let dloc = local(dom, bounded_nonempty(self.x) && result.is_bounded());
+        let dloc = local(dom, bounded_nonempty(self.x));
         Self::pack(result, self.d.meet(dloc))
     }
 }
