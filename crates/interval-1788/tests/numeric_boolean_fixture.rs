@@ -7,11 +7,14 @@
 //! conformance vectors (`libieeep1788_num.itl`, `libieeep1788_bool.itl`,
 //! `libieeep1788_overlap.itl`). The orderings and overlap are exact endpoint
 //! comparisons, so their vectors are pinned exactly, empty tables included. The
-//! numeric `mid`/`rad` cannot always reproduce the Level 2 datum on a
-//! directed-rounding surface: the exact-midpoint cases (empty, singleton,
-//! symmetric-about-zero, `Entire`) are pinned bit-for-bit, and the remaining
-//! cases assert the defining enclosure property `[mid - rad, mid + rad]` contains
-//! the interval, which holds on any sound backend (see the note on `mid_rad`).
+//! numeric `mid`/`rad` are pinned bit-for-bit wherever the Level 2 datum is exact
+//! on a sound backend: empty, singleton, symmetric-about-zero, `Entire`, and the
+//! half-unbounded realmax cases (`mid([a, +inf]) = +MAX`,
+//! `mid([-inf, b]) = -MAX`), reached through the largest-finite capability. The
+//! general bounded cases assert the defining enclosure property
+//! `[mid - rad, mid + rad]` contains the interval, which holds on any sound
+//! backend but is only last-ulp tight on a correctly-rounded one (see the note on
+//! `mid_rad`).
 //!
 //! The property lanes add: (a) the defining enclosure property over random
 //! bounded intervals; (b) `mid` inside the interval and `rad` nonnegative; (c)
@@ -121,18 +124,30 @@ fn mid_rad_general_bounded_encloses() {
 
 #[test]
 fn mid_rad_half_unbounded() {
-    // minimal_mid_test pins realmax / -realmax here; the RoundFloat surface has no
-    // largest-finite constant, so mid returns the finite endpoint (documented
-    // divergence). The radius is +inf, so the enclosure holds trivially and the
-    // reported midpoint is a sound member of the interval.
-    for x in [
-        iv(0.0, INF),
-        iv(NEG_INF, 1.2),
-        iv(-5.0, INF),
-        iv(NEG_INF, -3.0),
+    // minimal_mid_test pins realmax / -realmax here, now reachable bit-exact
+    // through the largest-finite capability: `mid([a, +inf]) = +MAX` and
+    // `mid([-inf, b]) = -MAX`, radius +inf. These two vectors were previously
+    // unreachable (the surface had no largest-finite datum) and asserted only the
+    // enclosure property; they are pinned bit-for-bit now.
+    assert_eq!(iv(0.0, INF).mid(), Some(MAX)); // libieeep1788_num.itl mid [0.0,infinity]
+    assert_eq!(iv(NEG_INF, 1.2).mid(), Some(-MAX)); // libieeep1788_num.itl mid [-infinity,1.2]
+    assert_eq!(iv(0.0, INF).mid_rad(), Some((MAX, INF)));
+    assert_eq!(iv(NEG_INF, 1.2).mid_rad(), Some((-MAX, INF)));
+
+    // The convention across all four half-unbounded shapes: +MAX when unbounded
+    // above, -MAX when unbounded below, radius +inf, midpoint a member of the set.
+    for (x, want_mid) in [
+        (iv(0.0, INF), MAX),
+        (iv(NEG_INF, 1.2), -MAX),
+        (iv(-5.0, INF), MAX),
+        (iv(NEG_INF, -3.0), -MAX),
     ] {
         assert_encloses(x);
         let (mid, rad) = x.mid_rad().unwrap();
+        assert_eq!(
+            mid, want_mid,
+            "half-unbounded mid follows the realmax convention"
+        );
         assert_eq!(rad, INF, "an unbounded interval has an infinite radius");
         assert!(x.contains(mid), "midpoint must lie inside the interval");
     }

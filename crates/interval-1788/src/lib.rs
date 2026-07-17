@@ -112,5 +112,6 @@ pub use interval::Interval;
 // likewise the extension traits the elementary and integer-rounding point
 // functions are gated on.
 pub use round_float::{
-    RoundFloat, RoundHyperbolic, RoundInteger, RoundPow, RoundTranscendental, RoundTrig,
+    RoundFloat, RoundHyperbolic, RoundInteger, RoundLargestFinite, RoundPow, RoundTranscendental,
+    RoundTrig,
 };
