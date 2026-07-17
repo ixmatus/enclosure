@@ -45,7 +45,9 @@ The J-STAGE page snapshot is pre existing (saves rate limited on 2026-06-11).
 Map versus territory: Rump's own publications listing
 (`www.tuhh.de/ti3/publications.shtml?author=rump`) cites this paper with the
 wrong volume and pages (2(3):1101-1119) while linking the correct DOI; the
-J-STAGE publisher record above is authoritative. That listing URL also has no
-Wayback snapshot at all (query string URLs archive poorly); a save is owed.
+J-STAGE publisher record above is authoritative. That listing URL's owed save
+landed on the 2026-07-17 retry:
+web.archive.org/web/20260717080902/https://www.tuhh.de/ti3/publications.shtml?author=rump
+(the discrepancy is thereby preserved as it stood).
 The J-STAGE record carries a correction dated 2016-04-11 with empty detail
 fields; no separate erratum DOI exists.

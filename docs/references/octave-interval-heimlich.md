@@ -43,6 +43,11 @@ the packages.octave.org entry above is current; source of record is the
 SourceForge Mercurial tree, with the GitHub mirror (`oheim/octave-interval`)
 lagging at 3.2.1. Single maintainer, one posteo.de address.
 
-Unarchived as of 2026-06-11 (saves rate limited, no pre existing snapshot):
-the Conformance-Claim.html page and the GitHub mirror. A retry is owed; the
-conformance claim text is summarized above so the fact survives the URL.
+The 2026-06-11 archive debt (Conformance-Claim.html and the GitHub mirror,
+saves rate limited that session) was cleared on the 2026-07-17 retry:
+Conformance-Claim.html at
+web.archive.org/web/20260717080736/https://octave.sourceforge.io/interval/package_doc/Conformance-Claim.html
+and the mirror at
+web.archive.org/web/20260717080758/https://github.com/oheim/octave-interval.
+The conformance claim text stays summarized above so the fact survives the
+URL regardless.
