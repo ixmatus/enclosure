@@ -53,9 +53,12 @@
 //! decoration; and the cancellative operations of [`cancel`]
 //! ([`cancel_minus`](Interval::cancel_minus) and
 //! [`cancel_plus`](Interval::cancel_plus), which recover an interval after a
-//! known addition and always grade `trv`). Not yet present, and named rather
-//! than implied: the rest of the elementary set (the trigonometric and
-//! hyperbolic functions, `pow`), reverse operations, `mid`/`rad` and the
+//! known addition and always grade `trv`); and the transcendental growth arms of
+//! [`trig`] (`sin`, `cos`, `tan` behind [`RoundTrig`]; `sinh`, `cosh`, `tanh`
+//! behind [`RoundHyperbolic`]; `pow` behind [`RoundTranscendental`]; `rootn`
+//! behind [`RoundPow`]). Not yet present, and named rather than implied: the
+//! remaining elementary functions (the inverse trigonometric and hyperbolic
+//! functions, `pown`), reverse operations, `mid`/`rad` and the
 //! ordering relations, Level 2 (text I/O, the datum model), and conformance
 //! against the ITF1788 vector suite. The roadmap
 //! is the full set-based flavor; what is implemented at any version is stated
@@ -84,6 +87,7 @@ pub mod interval;
 pub mod ops;
 pub mod point;
 pub mod spec;
+pub mod trig;
 
 #[cfg(all(kani, feature = "fixture"))]
 mod kani_harness;
@@ -96,4 +100,6 @@ pub use interval::Interval;
 // (the SMIL/ferrodec backend) keeps resolving `interval_1788::RoundFloat`, and
 // likewise the extension traits the elementary and integer-rounding point
 // functions are gated on.
-pub use round_float::{RoundFloat, RoundInteger, RoundTranscendental};
+pub use round_float::{
+    RoundFloat, RoundHyperbolic, RoundInteger, RoundPow, RoundTranscendental, RoundTrig,
+};

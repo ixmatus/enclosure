@@ -29,6 +29,9 @@ consumers:
     decorated, from libieeep1788_elem.itl)
   - crates/interval-1788/tests/cancel_fixture.rs (cancelMinus and cancelPlus
     vectors, bare and decorated, from libieeep1788_cancel.itl)
+  - crates/interval-1788/tests/trig_pow_fixture.rs (sin, cos, tan, sinh, cosh,
+    tanh, pow vectors bare and decorated from libieeep1788_elem.itl, and the
+    three rootn vectors from c-xsc.itl, the only rootn cases in the corpus)
 verification:
   - none yet (the conformance lane that will consume these vectors is roadmap work)
 sha256:
