@@ -72,25 +72,42 @@ literature and the uncertainty is named (see Consequences).
    mechanical against the existing op patterns.
 4. **Numeric and boolean completion (the Phase C deferrals).** `mid`, `rad`,
    `mid_rad`; `equal`, `less`, `precedes`, `strict_less`, `strict_precedes`;
-   `overlap` (the sixteen-state relation). The empty and unbounded conventions
-   are pinned from the proxies and the corpus vectors.
-5. **Cancellative ops.** `cancel_minus`, `cancel_plus`.
-6. **Reverse operations.** `sqr_rev`, `abs_rev`, `pown_rev`, `sin_rev`,
-   `cos_rev`, `tan_rev`, `cosh_rev`, `mul_rev`, `mul_rev_to_pair`, the
-   binary (two-output-constraint) forms, and the `pow_rev1`/`pow_rev2` pair
-   the corpus carries separately. The transcendental reverses gate on the
+   `overlap` (the sixteen-state relation). The orderings are full-1788
+   required operations (clause 10.5.10, per D9.8 Annex A), absent from the
+   simplified profile. The empty and unbounded conventions for the shared
+   subset are pinned by the P1788.1/D9.8 tables (registry:
+   p1788-1-d98-draft), notably `mid`/`rad` returning no value on empty or
+   unbounded input, matching this crate's `Option` shape.
+5. **Cancellative ops.** `cancel_minus`, `cancel_plus`. Required even in the
+   simplified profile (D9.8 clause 4.5.3).
+6. **Reverse operations.** Required in the full standard: all reverse-mode
+   elementary functions (clause 10.5.4) and two-output division
+   `mul_rev_to_pair` (clause 10.5.5), per D9.8 Annex A. The corpus
+   additionally carries the binary (two-output-constraint) forms and the
+   `pow_rev1`/`pow_rev2` pair. The transcendental reverses gate on the
    battery rounds above.
-7. **Reduction operations.** `sum`, `dot`, `sum_abs`, `sum_sqr`. Their
-   required-versus-recommended status in the full standard is the largest
-   unverified boundary in this ledger; the corpus tests them thinly (16
-   assertions, nearest rounding only). Pin the status from the proxy
-   literature first; if required, a correctly-rounded `dot` is its own design
-   problem (exact accumulation) and must be priced before implementation.
+7. **Reduction operations.** `sum`, `dot`, `sum_square`, `sum_abs` (the
+   standard's name is `sumSquare`; the corpus's ITL says `sum_sqr`). Status
+   VERIFIED during this decision (2026-07-16): required in the set-based
+   flavor of full 1788, clause 12.2.12, per Annex A of the P1788.1/D9.8
+   draft, which lists them among the full standard's required operations
+   dropped from the profile. Accuracy is correctly rounded per rounding-mode
+   variant: the corpus's cancellation vector (`dot` of `{2^52+1, 2^104}`
+   with `{2^52-1, -1}` demanding exactly `-1`) is answerable only by exact
+   accumulation with one final rounding, so the exact-accumulation design
+   problem is real and priced in. Two design questions remain for the
+   implementation slice: the full rounding-mode list (the corpus tests only
+   `_nearest`; the clause text governs) and the operation's home, since
+   reductions act on point-number vectors, not intervals (a round-float
+   vector extension that this crate re-exports is the natural shape; decide
+   in that slice's ADR).
 8. **Text I/O.** `nums_to_interval`, `text_to_interval` (bare and decorated,
    including the uncertain form and hex literals the constructor vectors
-   exercise), and `interval_to_text`. The corpus has zero output assertions,
-   so output correctness rests on round-trip properties designed here, not on
-   vectors.
+   exercise), and `interval_to_text`; plus the exact text representation
+   `interval_to_exact`/`exact_to_interval`, required by full 1788 clause
+   13.4 (per D9.8 Annex A) and carrying ZERO corpus coverage. Output
+   correctness therefore rests entirely on round-trip properties designed
+   here, not on vectors.
 9. **Decoration overflow bug.** enc-1ta: the decorated basic ops demote on an
    unbounded result, per this crate's ADR-0004 pattern.
 10. **Tight binary64 backend in round-float.** The conformance vectors demand
@@ -146,12 +163,17 @@ what any road requires, and nothing in this decision touches it.
      (reductions, text I/O grammar) are fronted as design-first items so
      their cost surfaces early instead of at the end.
   2. **The required/recommended boundary is misdrawn.** The standard is
-     paywalled and the boundary is pinned from proxies (Revol; Pryce;
-     Kearfott; the corpus structure), per the decision made at the fork. If
-     an operation deferred as recommended turns out required, the conformance
-     claim slips in time; soundness is never at stake. The reductions ledger
-     item is the named worst case, and its status check is sequenced before
-     any implementation spend.
+     paywalled and the boundary is pinned from proxies, per the decision made
+     at the fork. The worst case named at decision time (the reductions) was
+     resolved the same day: Annex A of the publicly served P1788.1/D9.8 draft
+     enumerates the full standard's required operations dropped from the
+     profile (reverse ops 10.5.4, `mulRevToPair` 10.5.5, the orderings
+     10.5.10, reductions 12.2.12, exact text 13.4), and the ledger now cites
+     it (registry: p1788-1-d98-draft). Residual exposure: the draft is one
+     revision short of the published 1788.1, its Annex is informative, and
+     clause-level details of full 1788 (the reductions' rounding-mode list,
+     Level 2 conversion fine print) still rest on proxies. If a gap surfaces,
+     the conformance claim slips in time; soundness is never at stake.
   3. **The tight f64 backend under-delivers.** If the TwoSum/FMA route cannot
      decide the rounding direction for some operation on stable (division and
      sqrt are the candidates to watch), the in-tree vector lane shrinks and
@@ -187,6 +209,10 @@ what any road requires, and nothing in this decision touches it.
 
 - Registry: `docs/references/ieee-1788-2015.md` (the normative source, pointer
   only), `docs/references/ieee-1788-1-2017.md` (the declined anchor),
+  `docs/references/p1788-1-d98-draft.md` (the publicly served draft whose
+  Annex A settled the required-op boundary; Wayback saved at citation time),
+  `docs/references/kulisch-2008-p1788-draft.md` (the complete-arithmetic
+  lineage behind the reduction requirement),
   `docs/references/itf1788-framework.md` (the vendored corpus, its licenses,
   and its coverage gaps), with the free proxies
   `revol-1788-introduction.md`, `pryce-2016-forthcoming-1788.md`,

@@ -15,7 +15,8 @@ and the accretion ritual.
 - [Messine & Touhami 2006, reliable quadratic forms](messine-touhami-2006.md) — the heavier sequel; paywalled road continues marker
 - [IEEE Std 754-2019](ieee-754-2019.md) — the floating point standard; the two directed rounding attributes round-float consumes
 - [IEEE Std 1788-2015](ieee-1788-2015.md) — the interval standard interval-1788 implements; pointer plus three free proxies
-- [IEEE Std 1788.1-2017](ieee-1788-1-2017.md) — the simplified profile; the natural conformance target for a narrow v1.0
+- [IEEE Std 1788.1-2017](ieee-1788-1-2017.md) — the simplified profile; the declined v1.0 anchor, kept as an interim progress marker
+- [IEEE P1788.1/D9.8 draft (March 2017)](p1788-1-d98-draft.md) — free clause-level proxy for the profile; Annex A settled the v1.0 required-op boundary
 - [Goldberg 1991](goldberg-1991.md) — the free floating point exposition; first proxy for 754
 - [Muller et al, Handbook of Floating-Point Arithmetic](muller-handbook-fp.md) — the modern professional reference; second proxy for 754
 - [Revol 2017, introduction to IEEE 1788-2015](revol-1788-introduction.md) — the open exposition spec.rs cites; PDF freshly archived
@@ -44,6 +45,7 @@ and the accretion ritual.
 - [libieeep1788 (Nehmeier)](libieeep1788-nehmeier.md) — the draft era C++ reference; oracle with named caveats
 - [Kearfott 2013, the P-1788 overview](kearfott-2013-p1788-overview.md) — the working group chair's own account; free proxy for the standard's rationale
 - [Pryce 2016, the forthcoming standard 1788](pryce-2016-forthcoming-1788.md) — the technical editor's design rationale; free proxy
+- [Kulisch 2008 P1788 draft, complete arithmetic](kulisch-2008-p1788-draft.md) — the exact-dot-product lineage behind the clause 12.2.12 reductions
 - [Interval Computations site and reliable_computing list](interval-computations-site.md) — the community hub and the standardization record
 - [Reliable Computing, the journal](reliable-computing-journal.md) — the field's venue of record, community run since 2009
 
