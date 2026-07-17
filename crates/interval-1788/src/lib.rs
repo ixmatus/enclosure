@@ -46,12 +46,23 @@
 //! `intersection`/`convex_hull`); the `{com, dac, def, trv, ill}` decoration
 //! system on [`DecoratedInterval`]; and the first elementary functions
 //! ([`exp`](Interval::exp) and [`ln`](Interval::ln), behind the
-//! [`RoundTranscendental`] extension trait). Not yet present, and named
-//! rather than implied: the rest of the elementary set (the trigonometric
-//! and hyperbolic functions, `pow`), reverse operations, `mid`/`rad` and the
+//! [`RoundTranscendental`] extension trait); and the point functions of
+//! [`point`] (`abs`, `min`, `max`, `sign` on bare [`RoundFloat`]; `ceil`,
+//! `floor`, `trunc`, `round_ties_to_even`, `round_ties_to_away` behind the
+//! [`RoundInteger`] extension trait), the first operations to earn the `def`
+//! decoration; and the cancellative operations of [`cancel`]
+//! ([`cancel_minus`](Interval::cancel_minus) and
+//! [`cancel_plus`](Interval::cancel_plus), which recover an interval after a
+//! known addition and always grade `trv`); and the transcendental growth arms of
+//! [`trig`] (`sin`, `cos`, `tan` behind [`RoundTrig`]; `sinh`, `cosh`, `tanh`
+//! behind [`RoundHyperbolic`]; `pow` and `rootn` behind [`RoundPow`]). Not yet
+//! present, and named rather than implied: the
+//! remaining elementary functions (the inverse trigonometric and hyperbolic
+//! functions, `pown`), reverse operations, `mid`/`rad` and the
 //! ordering relations, Level 2 (text I/O, the datum model), and conformance
-//! against the ITF1788 vector suite. The roadmap is the full set-based
-//! flavor; what is implemented at any version is stated per module.
+//! against the ITF1788 vector suite. The roadmap
+//! is the full set-based flavor; what is implemented at any version is stated
+//! per module.
 //!
 //! # No std
 //!
@@ -66,6 +77,7 @@
 #[cfg(feature = "std")]
 extern crate std;
 
+pub mod cancel;
 pub mod decorated;
 pub mod decoration;
 pub mod elementary;
@@ -73,7 +85,9 @@ pub mod error;
 pub mod functions;
 pub mod interval;
 pub mod ops;
+pub mod point;
 pub mod spec;
+pub mod trig;
 
 #[cfg(all(kani, feature = "fixture"))]
 mod kani_harness;
@@ -84,5 +98,8 @@ pub use error::IntervalError;
 pub use interval::Interval;
 // Re-exported from the foundation crate so downstream `impl RoundFloat for _`
 // (the SMIL/ferrodec backend) keeps resolving `interval_1788::RoundFloat`, and
-// likewise the extension trait the elementary functions are gated on.
-pub use round_float::{RoundFloat, RoundTranscendental};
+// likewise the extension traits the elementary and integer-rounding point
+// functions are gated on.
+pub use round_float::{
+    RoundFloat, RoundHyperbolic, RoundInteger, RoundPow, RoundTranscendental, RoundTrig,
+};

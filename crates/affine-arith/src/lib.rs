@@ -44,7 +44,11 @@
 //! [`mul`](AffineForm::mul)), and the nonlinear elementary functions
 //! ([`recip`](AffineForm::recip), [`sqrt`](AffineForm::sqrt),
 //! [`sqr`](AffineForm::sqr), [`exp`](AffineForm::exp), and
-//! [`ln`](AffineForm::ln), by Chebyshev approximation) are in place. The API may
+//! [`ln`](AffineForm::ln), by Chebyshev approximation) are in place, together
+//! with the per-arc trigonometric, hyperbolic, and power fits
+//! ([`sin`](AffineForm::sin), [`cos`](AffineForm::cos), [`sinh`](AffineForm::sinh),
+//! [`cosh`](AffineForm::cosh), [`tanh`](AffineForm::tanh), and
+//! [`pow_scalar`](AffineForm::pow_scalar); see the `trig` module). The API may
 //! break between 0.x releases; the workspace decision records carry the design.
 //!
 //! # No std
@@ -62,6 +66,7 @@ mod elementary;
 pub mod form;
 mod ops;
 pub mod symbol;
+mod trig;
 
 #[cfg(all(kani, feature = "fixture"))]
 mod kani_harness;

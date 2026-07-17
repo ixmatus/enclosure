@@ -26,6 +26,14 @@ consumers:
   - crates/interval-1788/README.md (verification disclosure)
   - crates/interval-1788/docs/decisions/0005-v1-road-full-conformance.md (the v1.0 blocker ledger's operation enumeration, extracted from the vendored itl files 2026-07-16)
   - docs/decisions/0007-transcendental-growth-round-two.md (atan2.itl and the elem vectors as round-two acceptance tests)
+  - crates/interval-1788/tests/point_functions_fixture.rs (abs, min, max, sign,
+    ceil, floor, trunc, roundTiesToEven, roundTiesToAway vectors, bare and
+    decorated, from libieeep1788_elem.itl)
+  - crates/interval-1788/tests/cancel_fixture.rs (cancelMinus and cancelPlus
+    vectors, bare and decorated, from libieeep1788_cancel.itl)
+  - crates/interval-1788/tests/trig_pow_fixture.rs (sin, cos, tan, sinh, cosh,
+    tanh, pow vectors bare and decorated from libieeep1788_elem.itl, and the
+    three rootn vectors from c-xsc.itl, the only rootn cases in the corpus)
 verification:
   - none yet (the conformance lane that will consume these vectors is roadmap work)
 sha256:

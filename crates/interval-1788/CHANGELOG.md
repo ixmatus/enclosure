@@ -8,6 +8,49 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Added
 
+- The transcendental growth arms on `Interval<F>` and `DecoratedInterval<F>`, in a
+  new `trig` module: `sin`, `cos`, `tan` (behind `F: RoundFloat + RoundTrig`),
+  `sinh`, `cosh`, `tanh` (behind `F: RoundFloat + RoundHyperbolic`), and `pow` and
+  `rootn` (behind `F: RoundFloat + RoundPow`); the three new extension traits are
+  re-exported beside `RoundFloat`. `sin`/`cos` follow the critical-point rule of
+  decision record 0005: an input spanning a full period (or unbounded) maps to
+  `[-1, 1]`, and otherwise the maxima and minima are admitted by testing whether a
+  grid point's sound enclosure (from the pi bracket and a directed index) meets the
+  input, so ambiguity widens toward the extremum and never guesses. `tan` returns
+  `Entire` when a pole enclosure may lie inside and the monotone branch otherwise.
+  `pow(X, Y)` decomposes by monotonicity in each argument, four-corner style
+  through the backend's directed `pow` on the nonnegative base domain (decision
+  record 0005 part 3; the exp/ln composition is the affine seam of part 4, not
+  this arm), with the base's zero column (`0^y = 0`, defined only for `y > 0`)
+  folded in; `rootn` splits on the parity of `n`. The decorated forms grade `com`/`dac`
+  by boundedness for the everywhere-continuous families, `trv` where `tan` hits a
+  pole or `pow`/`rootn` violates its base domain. Test lane
+  `tests/trig_pow_fixture.rs` transcribes the ITF1788 `libieeep1788_elem.itl` and
+  `c-xsc.itl` vectors (as the sound enclosure relationship on the loose fixture)
+  and adds pointwise-enclosure, full-period-shortcut, critical-point-stress,
+  `cosh`-minimum, and pole-straddle property lanes. Workspace decision record 0005.
+- The cancellative operations `cancel_minus` and `cancel_plus` on `Interval<F>`
+  and `DecoratedInterval<F>` (bare `F: RoundFloat`). `cancel_minus(x, y)` recovers
+  the tightest `z` with `y + z` enclosing `x`; `cancel_plus(x, y)` is
+  `cancel_minus(x, -y)`. The width gate certifies `wid(y) <= wid(x)` through the
+  addition rearrangement `x_lo + y_hi <= x_hi + y_lo` (exact on a
+  correctly-rounded backend, conservative toward Entire on the loose fixture), and
+  the endpoints round outward per the defining property so the recovery stays
+  sound. Neither is a fundamental-theorem operation, so the decorated forms grade
+  `trv` throughout; `NaI` propagates. Test lane `tests/cancel_fixture.rs`
+  transcribes the ITF1788 `libieeep1788_cancel.itl` vectors and adds
+  defining-property, round-trip, `cancel_plus` identity, and totality lanes.
+- The point-function battery: `abs`, `min`, `max`, and `sign` on `Interval<F>`
+  and `DecoratedInterval<F>` (bare `F: RoundFloat`), and `ceil`, `floor`,
+  `trunc`, `round_ties_to_even`, and `round_ties_to_away` behind
+  `F: RoundFloat + RoundInteger` (the new exact extension trait, re-exported
+  beside `RoundFloat`). Each is a monotone step or lattice function, so the
+  image is an exact endpoint computation with no outward widening. These are the
+  first operations to earn the `def` decoration from the operation itself: the
+  six discontinuous ones grade `def` when the box spans a jump, `com`/`dac`
+  otherwise, following the ITF1788 `libieeep1788_elem.itl` vectors. Test lane
+  `tests/point_functions_fixture.rs` transcribes the conformance vectors and adds
+  pointwise-enclosure, exactness, and decoration property tests.
 - Phase E opener, the first elementary functions.
   - `exp` and `ln` on `Interval<F>` and `DecoratedInterval<F>`, behind
     `F: RoundFloat + RoundTranscendental` (the extension trait, re-exported
@@ -108,3 +151,12 @@ v1.0; before then the API may break between 0.x releases.
   The flat path `interval_1788::RoundFloat` is preserved through the re-export.
   The deep path `interval_1788::round::RoundFloat` is gone, since the `round`
   module moved out; nothing in the family used it.
+
+### Fixed
+
+- Decorated `+`, `-`, `*`, `/`, `recip`, `sqr`, `sqrt`, and `mul_add` no longer
+  pack `com` with an overflowed unbounded result. A bounded operation can reach
+  `[lo, +inf]`, and `com` promises a bounded result, so the shared `pack` seam
+  now demotes `com` to `dac` whenever the assembled interval is unbounded. This
+  extends the overflow rule decision record 0004 established for `exp` and `ln`
+  to every decorated operation; `mul_add` gains its decorated form here.
