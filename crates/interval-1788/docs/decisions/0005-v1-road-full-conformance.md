@@ -58,14 +58,17 @@ literature and the uncertainty is named (see Consequences).
 1. **Elementary battery, first growth round (designed).** `sin`/`cos`/`tan`,
    `sinh`/`cosh`/`tanh`, `pow`/`rootn`: workspace ADR-0005 fixed the seams;
    the implementation half is enc-34n, promoted to a v1.0 blocker.
-2. **Elementary battery, second growth round (not yet designed).** The corpus
-   exercises operations outside ADR-0005's scope: inverse trig (`asin`,
-   `acos`, `atan`, `atan2`), inverse hyperbolics (`asinh`, `acosh`, `atanh`),
-   and the exponential/logarithm variants (`exp2`, `exp10`, `log2`, `log10`,
-   with `log` naming alignment to the standard). These need their own
-   round-float design slice (family traits, fixture margins, reduction rules)
-   in the mold of workspace ADR-0005 before their interval arms are
-   mechanical.
+2. **Elementary battery, second growth round (designed: workspace
+   ADR-0007).** The corpus exercises operations outside ADR-0005's scope:
+   inverse trig (`asin`, `acos`, `atan`, `atan2`), inverse hyperbolics
+   (`asinh`, `acosh`, `atanh`), the exponential/logarithm variants (`exp2`,
+   `exp10`, `log2`, `log10`, with `log` naming alignment to the standard),
+   and `pown` (surfaced by this ledger's corpus enumeration but scoped by
+   neither growth round until ADR-0007 placed it: an interval-layer case
+   table over bare `RoundFloat`, no backend trait growth). Workspace
+   ADR-0007 fixes the seams (three new capability traits, the margin
+   doctrine split for the arc-hyperbolic musl exception, the atan2 rule);
+   the interval arms are mechanical against it.
 3. **Point-function battery over bare `RoundFloat`.** `abs`, `min`, `max`,
    `sign` (`pos` is identity), `ceil`, `floor`, `trunc`, `roundTiesToEven`,
    `roundTiesToAway`. Piecewise monotone, no transcendental backend needed;
