@@ -108,3 +108,12 @@ v1.0; before then the API may break between 0.x releases.
   The flat path `interval_1788::RoundFloat` is preserved through the re-export.
   The deep path `interval_1788::round::RoundFloat` is gone, since the `round`
   module moved out; nothing in the family used it.
+
+### Fixed
+
+- Decorated `+`, `-`, `*`, `/`, `recip`, `sqr`, `sqrt`, and `mul_add` no longer
+  pack `com` with an overflowed unbounded result. A bounded operation can reach
+  `[lo, +inf]`, and `com` promises a bounded result, so the shared `pack` seam
+  now demotes `com` to `dac` whenever the assembled interval is unbounded. This
+  extends the overflow rule decision record 0004 established for `exp` and `ln`
+  to every decorated operation; `mul_add` gains its decorated form here.

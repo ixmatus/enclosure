@@ -7,18 +7,26 @@
 //! and decorates the result with the meet of that local decoration and the
 //! decorations the inputs carried. A `NaI` input poisons the result.
 //!
-//! For the operations here (`+`, `-`, `*`, `/`, `neg`, `recip`, `sqr`, `sqrt`)
-//! the local decoration is one of `com`, `dac`, or `trv`. These functions are
-//! continuous wherever they are defined, so `def` (defined but discontinuous)
-//! never arises from them; it is reachable only through [`set_dec`](DecoratedInterval::set_dec).
-//! The local decoration is:
+//! For the operations here (`+`, `-`, `*`, `/`, `neg`, `recip`, `sqr`, `sqrt`,
+//! `mul_add`) the local decoration is one of `com`, `dac`, or `trv`. These
+//! functions are continuous wherever they are defined, so `def` (defined but
+//! discontinuous) never arises from them; it is reachable only through
+//! [`set_dec`](DecoratedInterval::set_dec). The local decoration is:
 //!
 //! - `trv` when the operation is undefined somewhere on the input box (division
 //!   by an interval containing zero, square root of an interval reaching below
 //!   zero) or an input is empty;
-//! - `com` when it is defined and continuous and every input is bounded and
-//!   nonempty (so the result is bounded and nonempty);
-//! - `dac` when it is defined and continuous but some input is unbounded.
+//! - `com` when it is defined and continuous, every input is bounded and
+//!   nonempty, and the computed result is itself bounded;
+//! - `dac` when it is defined and continuous but some input is unbounded, or a
+//!   bounded input overflowed to an unbounded result.
+//!
+//! The last clause of the `com` case is a result obligation the inputs alone
+//! cannot discharge: a bounded operation can overflow to an unbounded result
+//! (adding `[MAX/2, MAX]` to itself reaches `+inf`), and `com` promises a
+//! bounded result. The `pack` seam every operation funnels through demotes
+//! `com` to `dac` whenever the assembled interval is unbounded, so no result
+//! escapes decorated `com` while unbounded.
 
 use core::ops::{Add, Div, Mul, Neg, Sub};
 
@@ -123,10 +131,22 @@ impl<F: RoundFloat> DecoratedInterval<F> {
         self.d == Decoration::Ill
     }
 
-    /// Construct a result, asserting the decoration is consistent with the
-    /// interval. Propagation always produces a consistent pair; the assertion
-    /// guards that in debug builds.
+    /// Assemble a decorated result at the single seam every operation funnels
+    /// through. A basic operation earns `com` from bounded nonempty inputs, but
+    /// such an operation can overflow to an unbounded result (adding
+    /// `[MAX/2, MAX]` to itself reaches `+inf`), and `com` promises a bounded
+    /// result, so `com` demotes to `dac` whenever the assembled interval is
+    /// unbounded. Where overflow is unreachable the demotion is a harmless
+    /// no-op. The assertion guards the remaining combinations in debug builds;
+    /// propagation otherwise always produces a consistent pair.
     fn pack(x: Interval<F>, d: Decoration) -> Self {
+        // The empty interval counts as bounded, so this fires only for a
+        // genuinely unbounded (overflowed) result, never for an empty one.
+        let d = if d == Decoration::Com && !x.is_bounded() {
+            Decoration::Dac
+        } else {
+            d
+        };
         debug_assert!(
             valid_combo(x, d),
             "decorated interval result violates the decoration invariant"
@@ -164,6 +184,27 @@ impl<F: RoundFloat> DecoratedInterval<F> {
         let dom = !self.x.is_empty() && self.x.inf() >= F::ZERO;
         let dloc = local(dom, bounded_nonempty(self.x));
         Self::pack(self.x.sqrt(), self.d.meet(dloc))
+    }
+
+    /// Multiply then add, `self * factor + addend`, decorated. Defined and
+    /// continuous everywhere, so the local decoration is `com` on bounded
+    /// nonempty inputs and `dac` when an input is unbounded; a bounded product
+    /// or sum that overflows to an unbounded result demotes `com` to `dac` at
+    /// the `pack` seam.
+    #[must_use]
+    pub fn mul_add(self, factor: Self, addend: Self) -> Self {
+        if self.is_nai() || factor.is_nai() || addend.is_nai() {
+            return Self::nai();
+        }
+        let dom = !self.x.is_empty() && !factor.x.is_empty() && !addend.x.is_empty();
+        let dloc = local(
+            dom,
+            bounded_nonempty(self.x) && bounded_nonempty(factor.x) && bounded_nonempty(addend.x),
+        );
+        Self::pack(
+            self.x.mul_add(factor.x, addend.x),
+            self.d.meet(factor.d).meet(addend.d).meet(dloc),
+        )
     }
 }
 
@@ -293,6 +334,57 @@ mod tests {
         let r = di(1.0, 2.0) + di(3.0, 4.0);
         assert_eq!(r.decoration(), Decoration::Com);
         assert_eq!((di(2.0, 3.0) * di(4.0, 5.0)).decoration(), Decoration::Com);
+    }
+
+    #[test]
+    fn addition_overflow_demotes_to_dac() {
+        // Bounded inputs, but the sum overflows to `[MAX, +inf]`; `com` promises
+        // a bounded result, so the overflow demotes to `dac` at the pack seam.
+        let r = di(f64::MAX / 2.0, f64::MAX) + di(f64::MAX / 2.0, f64::MAX);
+        assert!(!r.interval().is_bounded());
+        assert_eq!(r.interval().sup(), f64::INFINITY);
+        assert_eq!(r.decoration(), Decoration::Dac);
+    }
+
+    #[test]
+    fn multiplication_overflow_demotes_to_dac() {
+        // Bounded factors whose product overflows above the finite range.
+        let r = di(f64::MAX / 2.0, f64::MAX) * di(2.0, 2.0);
+        assert!(!r.interval().is_bounded());
+        assert_eq!(r.interval().sup(), f64::INFINITY);
+        assert_eq!(r.decoration(), Decoration::Dac);
+    }
+
+    #[test]
+    fn mul_add_overflow_demotes_to_dac() {
+        // The fused product overflows before the addend is applied.
+        let r = di(f64::MAX / 2.0, f64::MAX).mul_add(di(2.0, 2.0), di(1.0, 1.0));
+        assert!(!r.interval().is_bounded());
+        assert_eq!(r.interval().sup(), f64::INFINITY);
+        assert_eq!(r.decoration(), Decoration::Dac);
+    }
+
+    #[test]
+    fn recip_overflow_demotes_to_dac() {
+        // The smallest positive subnormal inverts above the finite range, so a
+        // bounded zero-excluding interval reciprocates to an unbounded upper
+        // endpoint, another bounded-input-to-unbounded-result case the
+        // input-only decoration would have packed as `com`.
+        let tiny = f64::from_bits(1);
+        let r = di(tiny, 1.0).recip();
+        assert!(!r.interval().is_bounded());
+        assert_eq!(r.interval().sup(), f64::INFINITY);
+        assert_eq!(r.decoration(), Decoration::Dac);
+    }
+
+    #[test]
+    fn mul_add_bounded_stays_com() {
+        // An ordinary bounded fused multiply-add keeps `com`: the demotion does
+        // not touch a result that stays inside the finite range.
+        let r = di(2.0, 3.0).mul_add(di(4.0, 5.0), di(1.0, 1.0));
+        assert_eq!(r.decoration(), Decoration::Com);
+        assert!(r.interval().contains(9.0));
+        assert!(r.interval().contains(16.0));
     }
 
     #[test]
