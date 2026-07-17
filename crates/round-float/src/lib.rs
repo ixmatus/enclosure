@@ -402,6 +402,137 @@ pub trait RoundPow: RoundFloat {
     fn rootn_up(self, n: u32) -> Self;
 }
 
+/// Outward-directed inverse trigonometric functions, layered above
+/// [`RoundFloat`].
+///
+/// The family is `asin`, `acos`, `atan`, and the two-argument `atan2`, plus the
+/// same π enclosure [`RoundTrig`] carries. π rides this trait for the same
+/// reason it rides [`RoundTrig`]: the range clamps of the inverse functions are
+/// stated in π (`asin`/`atan` into the ±π/2 brackets, `acos` into `[0, π]`,
+/// `atan2` into `(-π, π]`), and a backend implementing only this family owes
+/// only this enclosure. A backend implementing both `RoundTrig` and this trait
+/// supplies the π pair twice; the duplication is the accepted cost of keeping
+/// the traits independent, exactly the [`RoundTrig`] `floor` trade. See
+/// workspace decision record 0007.
+///
+/// # The contract each method must honor, and the caller-owned domains
+///
+/// For a finite `self`, [`asin_down`](RoundInverseTrig::asin_down) returns a
+/// float less than or equal to the exact real `asin(self)` and
+/// [`asin_up`](RoundInverseTrig::asin_up) one greater than or equal to it;
+/// likewise for `acos` and `atan`. `asin` and `acos` are defined on `[-1, 1]`,
+/// `atan` on the whole line. An out-of-domain argument to `asin`/`acos` is the
+/// caller's to guard: the f64 fixture passes `libm`'s NaN through, and the
+/// interval layer owns the domain restriction. [`atan2_down`](RoundInverseTrig::atan2_down)
+/// and [`atan2_up`](RoundInverseTrig::atan2_up) bound `atan2(self, other)`, the
+/// principal angle of the point `(other, self)` with `self` the ordinate (`y`)
+/// and `other` the abscissa (`x`), matching `f64::atan2`; the origin `(0, 0)` is
+/// outside the domain and the interval layer owns its set semantics. Soundness
+/// (the bound is never on the wrong side) is the obligation; tightness is a
+/// quality a correctly-rounded backend may add.
+pub trait RoundInverseTrig: RoundFloat {
+    /// A lower bound on the exact `asin(self)` (requires `self` in `[-1, 1]`).
+    fn asin_down(self) -> Self;
+    /// An upper bound on the exact `asin(self)` (requires `self` in `[-1, 1]`).
+    fn asin_up(self) -> Self;
+    /// A lower bound on the exact `acos(self)` (requires `self` in `[-1, 1]`).
+    fn acos_down(self) -> Self;
+    /// An upper bound on the exact `acos(self)` (requires `self` in `[-1, 1]`).
+    fn acos_up(self) -> Self;
+    /// A lower bound on the exact `atan(self)`.
+    fn atan_down(self) -> Self;
+    /// An upper bound on the exact `atan(self)`.
+    fn atan_up(self) -> Self;
+    /// A lower bound on the exact `atan2(self, other)` (the angle of `(other,
+    /// self)`; the caller owns the precondition that `(other, self)` is not the
+    /// origin).
+    fn atan2_down(self, other: Self) -> Self;
+    /// An upper bound on the exact `atan2(self, other)`.
+    fn atan2_up(self, other: Self) -> Self;
+
+    /// The largest backend float not exceeding the mathematical π: the lower
+    /// endpoint of the format's enclosure of π.
+    ///
+    /// This duplicates [`RoundTrig::pi_down`] by workspace decision record
+    /// 0007's accepted trade, so a backend implementing only inverse trig owes
+    /// no dependence on [`RoundTrig`].
+    fn pi_down() -> Self;
+    /// The smallest backend float not below the mathematical π: the upper
+    /// endpoint of the format's enclosure of π.
+    fn pi_up() -> Self;
+}
+
+/// Outward-directed inverse hyperbolic functions, layered above [`RoundFloat`].
+///
+/// The family is `asinh`, `acosh`, `atanh`, reduction-free and constant-free.
+/// It is a trait separate from [`RoundInverseTrig`] and [`RoundExpBases`]
+/// because a backend lands the families on independent schedules (musl itself
+/// treats the arc hyperbolics differently from the inverse trig set: they sit
+/// among the named exceptions to its accuracy goal). See workspace decision
+/// record 0007.
+///
+/// # The contract each method must honor, and the caller-owned domains
+///
+/// For a finite `self`, [`asinh_down`](RoundInverseHyperbolic::asinh_down)
+/// returns a float less than or equal to the exact real `asinh(self)` and
+/// [`asinh_up`](RoundInverseHyperbolic::asinh_up) one greater than or equal to
+/// it; likewise for `acosh` and `atanh`. `asinh` is defined on the whole line,
+/// `acosh` on `[1, +inf)`, `atanh` on the open `(-1, 1)`. An out-of-domain
+/// argument is the caller's to guard: the f64 fixture passes `libm`'s sentinel
+/// through (`acosh` below 1, `atanh` at or outside `±1`), and the interval layer
+/// owns the domain restriction and the unbounded results at the `atanh`
+/// endpoints. Soundness is the obligation; tightness is a backend quality.
+pub trait RoundInverseHyperbolic: RoundFloat {
+    /// A lower bound on the exact `asinh(self)`.
+    fn asinh_down(self) -> Self;
+    /// An upper bound on the exact `asinh(self)`.
+    fn asinh_up(self) -> Self;
+    /// A lower bound on the exact `acosh(self)` (requires `self >= 1`).
+    fn acosh_down(self) -> Self;
+    /// An upper bound on the exact `acosh(self)` (requires `self >= 1`).
+    fn acosh_up(self) -> Self;
+    /// A lower bound on the exact `atanh(self)` (requires `self` in `(-1, 1)`).
+    fn atanh_down(self) -> Self;
+    /// An upper bound on the exact `atanh(self)` (requires `self` in `(-1, 1)`).
+    fn atanh_up(self) -> Self;
+}
+
+/// Outward-directed base-2 and base-10 exponential and logarithm functions,
+/// layered above [`RoundFloat`].
+///
+/// The family is `exp2`, `exp10`, `log2`, `log10`, independent of both the
+/// natural `exp`/`ln` of [`RoundTranscendental`] and the other round-two
+/// families, and constant-free. See workspace decision record 0007.
+///
+/// # The contract each method must honor, and the caller-owned domains
+///
+/// For a finite `self`, [`exp2_down`](RoundExpBases::exp2_down) returns a float
+/// less than or equal to the exact real `2^self` and
+/// [`exp2_up`](RoundExpBases::exp2_up) one greater than or equal to it; likewise
+/// for `exp10` (`10^self`). `log2` and `log10` are defined on `(0, +inf)`; a
+/// non-positive argument is the caller's to guard, and the f64 fixture passes
+/// `libm`'s sentinel through (NaN for a negative argument, negative infinity at
+/// zero), exactly as `ln` does. Soundness is the obligation; tightness is a
+/// backend quality.
+pub trait RoundExpBases: RoundFloat {
+    /// A lower bound on the exact `2^self`.
+    fn exp2_down(self) -> Self;
+    /// An upper bound on the exact `2^self`.
+    fn exp2_up(self) -> Self;
+    /// A lower bound on the exact `10^self`.
+    fn exp10_down(self) -> Self;
+    /// An upper bound on the exact `10^self`.
+    fn exp10_up(self) -> Self;
+    /// A lower bound on the exact `log2(self)` (requires `self > 0`).
+    fn log2_down(self) -> Self;
+    /// An upper bound on the exact `log2(self)` (requires `self > 0`).
+    fn log2_up(self) -> Self;
+    /// A lower bound on the exact `log10(self)` (requires `self > 0`).
+    fn log10_down(self) -> Self;
+    /// An upper bound on the exact `log10(self)` (requires `self > 0`).
+    fn log10_up(self) -> Self;
+}
+
 /// Correctly rounded vector reductions, layered above [`RoundFloat`], and the
 /// family's first tightness-mandatory trait.
 ///

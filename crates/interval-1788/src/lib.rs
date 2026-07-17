@@ -56,19 +56,19 @@
 //! decoration; and the cancellative operations of [`cancel`]
 //! ([`cancel_minus`](Interval::cancel_minus) and
 //! [`cancel_plus`](Interval::cancel_plus), which recover an interval after a
-//! known addition and always grade `trv`); and the transcendental growth arms of
+//! known addition and always grade `trv`); the transcendental growth arms of
 //! [`trig`] (`sin`, `cos`, `tan` behind [`RoundTrig`]; `sinh`, `cosh`, `tanh`
-//! behind [`RoundHyperbolic`]; `pow` and `rootn` behind [`RoundPow`]). Not yet
-//! present, and named rather than implied: the
-//! remaining elementary functions (the inverse trigonometric and hyperbolic
-//! functions, `pown`), reverse operations, `mid`/`rad` and the
-//! ordering relations, Level 2 (text I/O, the datum model), and conformance
-//! against the ITF1788 vector suite. The roadmap
-//! known addition and always grade `trv`). Not yet present, and named rather
-//! than implied: the rest of the elementary set (the trigonometric and
-//! hyperbolic functions, `pow`), reverse operations, Level 2 (text I/O, the
-//! datum model, and a nearest-float `mid` over a correctly-rounded backend), and
-//! conformance against the ITF1788 vector suite. The roadmap
+//! behind [`RoundHyperbolic`]; `pow` and `rootn` behind [`RoundPow`]); and the
+//! second elementary growth round of [`inverse`] (`asin`, `acos`, `atan`, and
+//! the two-argument `atan2` behind [`RoundInverseTrig`]; `asinh`, `acosh`,
+//! `atanh` behind [`RoundInverseHyperbolic`]; `exp2`, `exp10`, `log2`, `log10`
+//! behind [`RoundExpBases`]; and the integer power `pown` on bare
+//! [`RoundFloat`], `atan2` the first arm to earn the `def` decoration from a
+//! branch-cut crossing). Not yet present, and named rather than implied: reverse
+//! operations, the `mid`/`rad` numeric functions and the remaining ordering
+//! relations, Level 2 (text I/O, the datum model, and a nearest-float `mid` over
+//! a correctly-rounded backend), and conformance against the ITF1788 vector
+//! suite. The roadmap
 //! is the full set-based flavor; what is implemented at any version is stated
 //! per module.
 //!
@@ -92,6 +92,7 @@ pub mod elementary;
 pub mod error;
 pub mod functions;
 pub mod interval;
+pub mod inverse;
 pub mod ops;
 pub mod point;
 pub mod spec;
@@ -112,6 +113,6 @@ pub use interval::Interval;
 // likewise the extension traits the elementary and integer-rounding point
 // functions are gated on.
 pub use round_float::{
-    RoundFloat, RoundHyperbolic, RoundInteger, RoundLargestFinite, RoundPow, RoundReduction,
-    RoundTranscendental, RoundTrig,
+    RoundExpBases, RoundFloat, RoundHyperbolic, RoundInteger, RoundInverseHyperbolic,
+    RoundInverseTrig, RoundLargestFinite, RoundPow, RoundReduction, RoundTranscendental, RoundTrig,
 };

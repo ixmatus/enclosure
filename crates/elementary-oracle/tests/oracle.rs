@@ -23,7 +23,10 @@ use affine_arith::{with_source, AffineForm};
 use interval_1788::Interval;
 use pfloat_libm::f64 as oracle;
 use pfloat_libm::RoundingMode::{TowardNegative, TowardPositive};
-use round_float::{RoundHyperbolic, RoundPow, RoundTranscendental, RoundTrig};
+use round_float::{
+    RoundExpBases, RoundHyperbolic, RoundInverseHyperbolic, RoundInverseTrig, RoundPow,
+    RoundTranscendental, RoundTrig,
+};
 
 /// The tightest true bracket of `exp(x)` from the correctly-rounded oracle.
 fn exp_bracket(x: f64) -> (f64, f64) {
@@ -541,5 +544,346 @@ fn affine_pow_scalar_encloses_composition_reference() {
                 }
             }
         }
+    }
+}
+
+// --- Round-two growth: inverse trig/hyperbolic, base variants, atan2 --------
+//
+// Workspace ADR-0007 part 5. Each round-two function joins the lane with a grid
+// aimed at its hazard. The arc hyperbolics carry a stronger role: their fixture
+// margin is DERIVED from these measurements (part 2), so the lane is the anchor,
+// not merely a check, for exactly that family. pfloat-libm at the pinned rev
+// exposes every needed single-argument function; it has no `atan2`, so the
+// two-argument case rides the correctly-rounded `atan` composition on the
+// positive-abscissa half-plane (`atan2(y, x) = atan(y / x)` for `x > 0`), the
+// sound differential sanity available without an `atan2` oracle.
+
+/// The correctly-rounded bracket of `asin(x)` (requires `x` in `[-1, 1]`).
+fn asin_bracket(x: f64) -> (f64, f64) {
+    (
+        oracle::asin_round(x, TowardNegative).0,
+        oracle::asin_round(x, TowardPositive).0,
+    )
+}
+
+/// The correctly-rounded bracket of `acos(x)`.
+fn acos_bracket(x: f64) -> (f64, f64) {
+    (
+        oracle::acos_round(x, TowardNegative).0,
+        oracle::acos_round(x, TowardPositive).0,
+    )
+}
+
+/// The correctly-rounded bracket of `atan(x)`.
+fn atan_bracket(x: f64) -> (f64, f64) {
+    (
+        oracle::atan_round(x, TowardNegative).0,
+        oracle::atan_round(x, TowardPositive).0,
+    )
+}
+
+/// The correctly-rounded bracket of `asinh(x)`.
+fn asinh_bracket(x: f64) -> (f64, f64) {
+    (
+        oracle::asinh_round(x, TowardNegative).0,
+        oracle::asinh_round(x, TowardPositive).0,
+    )
+}
+
+/// The correctly-rounded bracket of `acosh(x)` (requires `x >= 1`).
+fn acosh_bracket(x: f64) -> (f64, f64) {
+    (
+        oracle::acosh_round(x, TowardNegative).0,
+        oracle::acosh_round(x, TowardPositive).0,
+    )
+}
+
+/// The correctly-rounded bracket of `atanh(x)` (requires `x` in `(-1, 1)`).
+fn atanh_bracket(x: f64) -> (f64, f64) {
+    (
+        oracle::atanh_round(x, TowardNegative).0,
+        oracle::atanh_round(x, TowardPositive).0,
+    )
+}
+
+/// The correctly-rounded bracket of `exp2(x)`.
+fn exp2_bracket(x: f64) -> (f64, f64) {
+    (
+        oracle::exp2_round(x, TowardNegative).0,
+        oracle::exp2_round(x, TowardPositive).0,
+    )
+}
+
+/// The correctly-rounded bracket of `exp10(x)`.
+fn exp10_bracket(x: f64) -> (f64, f64) {
+    (
+        oracle::exp10_round(x, TowardNegative).0,
+        oracle::exp10_round(x, TowardPositive).0,
+    )
+}
+
+/// The correctly-rounded bracket of `log2(x)` (requires `x > 0`).
+fn log2_bracket(x: f64) -> (f64, f64) {
+    (
+        oracle::log2_round(x, TowardNegative).0,
+        oracle::log2_round(x, TowardPositive).0,
+    )
+}
+
+/// The correctly-rounded bracket of `log10(x)` (requires `x > 0`).
+fn log10_bracket(x: f64) -> (f64, f64) {
+    (
+        oracle::log10_round(x, TowardNegative).0,
+        oracle::log10_round(x, TowardPositive).0,
+    )
+}
+
+#[test]
+fn fixture_inverse_trig_brackets_correct_rounding() {
+    // asin/acos over [-1, 1] with a cluster inside the ADR's 1e-9 hazard band of
+    // +-1 (the saturating hazard where the relative margin's soundness at the
+    // range endpoint is tested).
+    //
+    // GRID BUDGET, measured 2026-07-17: pfloat's correctly rounded inverse trig
+    // costs roughly 0.7 seconds PER CALL in debug mode (617 s of CPU covered
+    // fewer than 900 calls), an order of magnitude above its exp/log/hyperbolic
+    // cost, so this test's density is capped where the others' need not be. The
+    // grid below is about 230 oracle calls, near three minutes in debug; a
+    // denser sweep (originally 155 coarse points plus 200 per side in the
+    // cluster) ran for tens of minutes without finishing. Resize with that
+    // per-call cost in mind.
+    let mut xs: Vec<f64> = Vec::new();
+    let mut t = -1.0;
+    while t <= 1.0 {
+        xs.push(t);
+        t += 0.052;
+    }
+    for k in 0..6 {
+        let d = f64::from(k) * 2.0e-10;
+        xs.push(1.0 - d);
+        xs.push(-1.0 + d);
+    }
+    for &x in &xs {
+        if !(-1.0..=1.0).contains(&x) {
+            continue;
+        }
+        let (lo, hi) = asin_bracket(x);
+        assert!(
+            x.asin_down() <= lo && hi <= x.asin_up(),
+            "asin bracket lost at x = {x}: fixture [{}, {}], oracle [{lo}, {hi}]",
+            x.asin_down(),
+            x.asin_up()
+        );
+        let (lo, hi) = acos_bracket(x);
+        assert!(
+            x.acos_down() <= lo && hi <= x.acos_up(),
+            "acos bracket lost at x = {x}: fixture [{}, {}], oracle [{lo}, {hi}]",
+            x.acos_down(),
+            x.acos_up()
+        );
+    }
+    // atan over many magnitudes, including where it saturates toward +-pi/2.
+    let mut x = -1.0e12_f64;
+    while x <= 1.0e12 {
+        let (lo, hi) = atan_bracket(x);
+        assert!(
+            x.atan_down() <= lo && hi <= x.atan_up(),
+            "atan bracket lost at x = {x}"
+        );
+        x = if x.abs() < 1.0 { x + 0.31 } else { x * 3.4 };
+    }
+}
+
+#[test]
+fn fixture_arc_hyperbolic_brackets_correct_rounding() {
+    // THE ANCHOR for ARC_HYPERBOLIC_MARGIN (ADR-0007 part 2): the fixture's
+    // widened arc-hyperbolic bounds must bracket the correctly-rounded value over
+    // the hazard grids, densest where each result is most delicate. If this lane
+    // fails, the empirically pinned margin is wrong, not merely loose.
+    let mut probes: Vec<f64> = vec![0.0];
+    let mut v = 1.0e-9_f64;
+    while v <= 1.0e9 {
+        probes.push(v);
+        probes.push(-v);
+        v *= 1.4;
+    }
+    for &x in &probes {
+        let (lo, hi) = asinh_bracket(x);
+        assert!(
+            x.asinh_down() <= lo && hi <= x.asinh_up(),
+            "asinh bracket lost at x = {x}: fixture [{}, {}], oracle [{lo}, {hi}]",
+            x.asinh_down(),
+            x.asinh_up()
+        );
+    }
+    // acosh approaching 1 (the vanishing-result hazard) and a geometric tail.
+    let mut cs: Vec<f64> = Vec::new();
+    for k in 0..300 {
+        cs.push(1.0 + f64::from(k) * 1.0e-9);
+    }
+    let mut c = 1.0_f64;
+    while c <= 1.0e8 {
+        cs.push(c);
+        c *= 1.4;
+    }
+    for &x in &cs {
+        let (lo, hi) = acosh_bracket(x);
+        assert!(
+            x.acosh_down() <= lo && hi <= x.acosh_up(),
+            "acosh bracket lost at x = {x}: fixture [{}, {}], oracle [{lo}, {hi}]",
+            x.acosh_down(),
+            x.acosh_up()
+        );
+        assert!(x.acosh_down() >= 0.0, "acosh floor breached at {x}");
+    }
+    // atanh approaching +-1 (the diverging hazard) and near zero.
+    let mut ts: Vec<f64> = Vec::new();
+    for k in 1..300 {
+        let d = f64::from(k) * 1.0e-9;
+        ts.push(1.0 - d);
+        ts.push(-(1.0 - d));
+        ts.push(f64::from(k) * 1.0e-3 - 0.15);
+    }
+    for &x in &ts {
+        if x <= -1.0 || x >= 1.0 {
+            continue;
+        }
+        let (lo, hi) = atanh_bracket(x);
+        assert!(
+            x.atanh_down() <= lo && hi <= x.atanh_up(),
+            "atanh bracket lost at x = {x}: fixture [{}, {}], oracle [{lo}, {hi}]",
+            x.atanh_down(),
+            x.atanh_up()
+        );
+    }
+}
+
+#[test]
+fn fixture_base_variants_bracket_correct_rounding() {
+    // exp2/exp10 across their finite range up to the overflow shoulders
+    // (exp2 overflows near 1024, exp10 near 308.25).
+    let mut x = -1050.0_f64;
+    while x <= 1050.0 {
+        let (lo, hi) = exp2_bracket(x);
+        if lo.is_finite() && hi.is_finite() {
+            assert!(
+                x.exp2_down() <= lo && hi <= x.exp2_up(),
+                "exp2 bracket lost at x = {x}"
+            );
+        }
+        x += 4.7;
+    }
+    let mut x = -320.0_f64;
+    while x <= 320.0 {
+        let (lo, hi) = exp10_bracket(x);
+        if lo.is_finite() && hi.is_finite() {
+            assert!(
+                x.exp10_down() <= lo && hi <= x.exp10_up(),
+                "exp10 bracket lost at x = {x}"
+            );
+        }
+        x += 1.3;
+    }
+    // log2/log10 over many decades, densest near 1 where a relative claim is most
+    // delicate (the result crosses zero).
+    let mut ls: Vec<f64> = Vec::new();
+    let mut v = 1.0e-12_f64;
+    while v <= 1.0e12 {
+        ls.push(v);
+        v *= 1.6;
+    }
+    for k in -200..=200 {
+        ls.push(1.0 + f64::from(k) * 1.0e-9);
+    }
+    for &x in &ls {
+        if x <= 0.0 {
+            continue;
+        }
+        let (lo, hi) = log2_bracket(x);
+        assert!(
+            x.log2_down() <= lo && hi <= x.log2_up(),
+            "log2 bracket lost at x = {x}"
+        );
+        let (lo, hi) = log10_bracket(x);
+        assert!(
+            x.log10_down() <= lo && hi <= x.log10_up(),
+            "log10 bracket lost at x = {x}"
+        );
+    }
+}
+
+#[test]
+fn fixture_atan2_brackets_atan_composition() {
+    // pfloat-libm has no atan2; on the positive-abscissa half-plane
+    // atan2(y, x) = atan(y / x), so a correctly-rounded reference is the atan of
+    // the directed f64 quotient bracket. The fixture atan2 must enclose it. This
+    // is the sound differential sanity available without an atan2 oracle; the
+    // branch-cut and origin semantics are pinned by the interval vectors instead.
+    let ys = [-1.0e6_f64, -3.0, -1.0, -0.1, 0.0, 0.1, 1.0, 3.0, 1.0e6];
+    let xs = [1.0e-6_f64, 0.1, 0.5, 1.0, 2.0, 10.0, 1.0e6];
+    for &y in &ys {
+        for &x in &xs {
+            // Directed bracket of the exact ratio y / x (x > 0): the true ratio
+            // lies between the neighbors of the round-to-nearest quotient.
+            let q = y / x;
+            let (t_lo, t_hi) = (q.next_down(), q.next_up());
+            let lo = oracle::atan_round(t_lo, TowardNegative).0;
+            let hi = oracle::atan_round(t_hi, TowardPositive).0;
+            assert!(
+                y.atan2_down(x) <= lo && hi <= y.atan2_up(x),
+                "atan2 bracket lost at (y, x) = ({y}, {x}): fixture [{}, {}], ref [{lo}, {hi}]",
+                y.atan2_down(x),
+                y.atan2_up(x)
+            );
+        }
+    }
+}
+
+#[test]
+fn interval_round_two_arms_enclose_correct_rounding() {
+    // A representative interval-arm spot check: the monotone arms' endpoint
+    // images must bracket the correctly-rounded value at every sampled point.
+    let mut a = -3.0_f64;
+    while a <= 3.0 {
+        let b = a + 0.25;
+        let enc = Interval::new(a, b).unwrap().asinh();
+        for k in 0..=8 {
+            let x = a + (b - a) * (f64::from(k) / 8.0);
+            let (lo, hi) = asinh_bracket(x);
+            assert!(
+                enc.inf() <= lo && hi <= enc.sup(),
+                "interval asinh over [{a}, {b}] lost asinh({x})"
+            );
+        }
+        a += 0.37;
+    }
+    // acosh over [1.5, 40], atanh over (-0.9, 0.9), log2 over positive decades.
+    let mut a = 1.5_f64;
+    while a <= 40.0 {
+        let b = a + 0.3;
+        let enc = Interval::new(a, b).unwrap().acosh();
+        for k in 0..=8 {
+            let x = a + (b - a) * (f64::from(k) / 8.0);
+            let (lo, hi) = acosh_bracket(x);
+            assert!(
+                enc.inf() <= lo && hi <= enc.sup(),
+                "interval acosh over [{a}, {b}] lost acosh({x})"
+            );
+        }
+        a *= 1.7;
+    }
+    let mut a = -0.9_f64;
+    while a <= 0.85 {
+        let b = a + 0.05;
+        let enc = Interval::new(a, b).unwrap().atanh();
+        for k in 0..=8 {
+            let x = a + (b - a) * (f64::from(k) / 8.0);
+            let (lo, hi) = atanh_bracket(x);
+            assert!(
+                enc.inf() <= lo && hi <= enc.sup(),
+                "interval atanh over [{a}, {b}] lost atanh({x})"
+            );
+        }
+        a += 0.19;
     }
 }
