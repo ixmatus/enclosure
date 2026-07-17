@@ -8,7 +8,6 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Added
 
-<<<<<<< HEAD
 - The transcendental growth arms on `Interval<F>` and `DecoratedInterval<F>`, in a
   new `trig` module: `sin`, `cos`, `tan` (behind `F: RoundFloat + RoundTrig`),
   `sinh`, `cosh`, `tanh` (behind `F: RoundFloat + RoundHyperbolic`), and `pow` and
@@ -30,7 +29,6 @@ v1.0; before then the API may break between 0.x releases.
   `c-xsc.itl` vectors (as the sound enclosure relationship on the loose fixture)
   and adds pointwise-enclosure, full-period-shortcut, critical-point-stress,
   `cosh`-minimum, and pole-straddle property lanes. Workspace decision record 0005.
-=======
 - The text I/O surface, `interval-1788`'s Level 1 literal grammar for `f64`
   (ledger item 8), behind the `fixture` feature and with its threat model named
   in the module doc: the input is attacker-supplied bytes, and the worst it can
@@ -106,7 +104,6 @@ v1.0; before then the API may break between 0.x releases.
     orderings and overlap pinned exactly, empty tables included) and adds the
     enclosure-property, midpoint-membership, ordering-coherence, and
     overlap-consistency property lanes.
->>>>>>> feat/text-io
 - The cancellative operations `cancel_minus` and `cancel_plus` on `Interval<F>`
   and `DecoratedInterval<F>` (bare `F: RoundFloat`). `cancel_minus(x, y)` recovers
   the tightest `z` with `y + z` enclosing `x`; `cancel_plus(x, y)` is
