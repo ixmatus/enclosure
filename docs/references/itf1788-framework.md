@@ -24,6 +24,7 @@ consumers:
   - crates/interval-1788/src/lib.rs (roadmap conformance lane)
   - crates/interval-1788/docs/decisions/0003-kani-over-f64-fixture.md
   - crates/interval-1788/README.md (verification disclosure)
+  - crates/interval-1788/docs/decisions/0005-v1-road-full-conformance.md (the v1.0 blocker ledger's operation enumeration, extracted from the vendored itl files 2026-07-16)
 verification:
   - none yet (the conformance lane that will consume these vectors is roadmap work)
 sha256:
