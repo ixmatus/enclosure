@@ -63,5 +63,8 @@ pub mod form;
 mod ops;
 pub mod symbol;
 
+#[cfg(all(kani, feature = "fixture"))]
+mod kani_harness;
+
 pub use form::{AffineForm, Term};
 pub use symbol::{with_source, NoiseSymbol, SymbolSource};

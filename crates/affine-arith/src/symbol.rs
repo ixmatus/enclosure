@@ -168,6 +168,27 @@ impl SymbolSource<'static> {
 /// });
 /// assert!(enclosure.contains(0.0));
 /// ```
+///
+/// The brand is what makes that safe. A form is branded to the scope that built
+/// it, so combining it with a *different* scope's source does not compile. The
+/// snippet below is the passing example with one change: the `sub` draws its
+/// symbols from an inner scope's source, and the brand mismatch is the only
+/// plausible error, so the guard fails for exactly the intended reason.
+///
+/// ```compile_fail
+/// use affine_arith::{with_source, AffineForm};
+/// use interval_1788::Interval;
+///
+/// let iv = Interval::new(2.0_f64, 4.0).unwrap();
+/// with_source(|mut outer| {
+///     let x = AffineForm::from_interval(&iv, &mut outer).unwrap();
+///     with_source(|mut inner| {
+///         // `x` is branded to `outer`; `inner` carries a distinct brand, so the
+///         // compiler refuses to let `x` combine with `inner`'s symbols.
+///         x.sub(&x, &mut inner).reduce()
+///     })
+/// });
+/// ```
 pub fn with_source<R>(f: impl for<'id> FnOnce(SymbolSource<'id>) -> R) -> R {
     f(SymbolSource {
         next: 0,
