@@ -84,3 +84,21 @@ Each new function joins the elementary-oracle nightly lane against pfloat-libm w
 - `docs/references/pfloat-libm-oracle.md`: the correctly-rounded truth source for every new oracle grid.
 - `crates/round-float/src/f64_impl.rs:104-207` (the shipped margin doctrine), `crates/interval-1788/src/elementary.rs` (the monotone arms the new cases join), `crates/affine-arith/src/elementary.rs:40-72` (the linearize builder the per-arc fits reuse).
 - SMIL side: `docs/decisions/0056-*` (affine-backed Enclosed) and the BAND plotter, the consumers this unblocks.
+
+## Errata
+
+**2026-07-17: the open tanh clamp is unsound; the shipped clamp is closed.**
+The range-clamp bullet in the decision above directs implementations to clamp
+`tanh` results into the open interval (−1, 1). Implementation of the f64
+fixture proved that direction unsound at the saturation shoulders: for a large
+argument the true `tanh` lies closer to ±1 than one unit in the last place, so
+a far bound strictly inside the open interval crosses the true value, and the
+tightest representable sound bound on the saturated side is the endpoint
+itself. The shipped fixture therefore clamps into the closed interval [−1, 1],
+with the argument recorded at the site (`crates/round-float/src/f64_impl.rs`,
+`tanh_down`/`tanh_up`), and the `RoundHyperbolic` contract documentation
+states the closed range. The mathematical statement that the true `tanh` lies
+strictly inside (−1, 1) stands; the error was promoting that statement into a
+clamp target for the returned bounds. The `sin`/`cos` clamps ([−1, 1]) and the
+`cosh` floor (1) were stated closed from the start and are unaffected. Per the
+honesty of the record, the original text above is left as written.

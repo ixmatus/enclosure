@@ -313,10 +313,13 @@ pub trait RoundTrig: RoundFloat {
 /// less than or equal to the exact real `sinh(self)` and
 /// [`sinh_up`](RoundHyperbolic::sinh_up) one greater than or equal to it;
 /// likewise for `cosh` and `tanh`. The result of `cosh` is at least `1`, of
-/// `tanh` in `(-1, 1)`, and of `sinh` in the extended reals (an argument past the
-/// overflow shoulder gives the `[largest_finite, +inf]` style bounds the exp
-/// fixture established). Soundness is the obligation; tightness is a backend
-/// quality.
+/// `tanh` in the closed interval `[-1, 1]`, and of `sinh` in the extended reals
+/// (an argument past the overflow shoulder gives the `[largest_finite, +inf]`
+/// style bounds the exp fixture established). The `tanh` range is closed
+/// deliberately: the true `tanh` lies strictly inside `(-1, 1)`, but at the
+/// saturation shoulders it approaches `±1` closer than one ulp, so the
+/// endpoint is the tightest sound far bound (see workspace decision record
+/// 0005, errata). Soundness is the obligation; tightness is a backend quality.
 pub trait RoundHyperbolic: RoundFloat {
     /// A lower bound on the exact `sinh(self)`.
     fn sinh_down(self) -> Self;

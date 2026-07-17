@@ -90,3 +90,25 @@ orthogonal concern that keeps its own issue.
 - de Figueiredo and Stolfi, "Affine Arithmetic: Concepts and Applications" (2004),
   the univariate Chebyshev approximation; Stolfi and de Figueiredo (1997).
 - pfloat-libm (the correctly-rounded reference the oracle lane checks against).
+
+## Addendum
+
+**2026-07-17: the zero-touching `sqrt` refinement is closed, not deferred.**
+The decision above left "a tighter zero-touching path" as a later refinement.
+The refinement was attempted (bead enc-fj5) and the analysis closes it: the
+crate's enclosure invariant is pointwise-total (the output form must enclose
+the function's value at every joint assignment of the shared noise symbols),
+and a form built by `from_interval([0, b])` always reaches a strictly
+negative value (outward rounding forces `radius >= next_up(center)`, so the
+true minimum `center - radius` is negative for every such form). A fit over
+the clamped range is therefore sound only under 1788-style domain
+restriction, which is a different invariant, not a tighter implementation;
+adopting it needs a definedness or decoration analog for `AffineForm` first,
+since a bare form cannot record the restriction the way a decorated interval
+records `trv`, and restricting a shared noise symbol would corrupt sibling
+forms. The decline and its regression pin stand as the correct behavior
+under the current invariant. Successors: the domain-restriction semantics
+design (bead enc-hc2) and, orthogonally, an exact in-domain predicate that
+removes false declines for forms whose exact range is in domain while the
+double-rounded reduction endpoint crosses the boundary (bead enc-6lm);
+neither rescues `[0, b]`, whose sliver is genuine.
