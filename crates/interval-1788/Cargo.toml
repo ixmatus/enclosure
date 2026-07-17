@@ -69,6 +69,14 @@ required-features = ["fixture"]
 name = "trig_pow_fixture"
 required-features = ["fixture"]
 
+[[test]]
+name = "numeric_boolean_fixture"
+required-features = ["fixture"]
+
+[[test]]
+name = "text_io_fixture"
+required-features = ["fixture"]
+
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"

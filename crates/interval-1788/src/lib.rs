@@ -42,8 +42,11 @@
 //! ([`Interval`], the empty set, unbounded intervals); the total forward
 //! arithmetic (`+ - * /`, negation, `recip`, `sqr`, `sqrt`, `mul_add`, with
 //! the four-corner product); the numeric, boolean, and set functions of
-//! [`functions`] (`wid`/`mag`/`mig`, `subset`/`interior`/`disjoint`,
-//! `intersection`/`convex_hull`); the `{com, dac, def, trv, ill}` decoration
+//! [`functions`] (`wid`/`mag`/`mig`, `mid`/`rad`/`mid_rad`,
+//! `equal`/`subset`/`interior`/`disjoint`, the `less` and `precedes` orderings
+//! with their strict forms, the sixteen-state [`overlap`](Interval::overlap)
+//! relation, `intersection`/`convex_hull`); the `{com, dac, def, trv, ill}`
+//! decoration
 //! system on [`DecoratedInterval`]; and the first elementary functions
 //! ([`exp`](Interval::exp) and [`ln`](Interval::ln), behind the
 //! [`RoundTranscendental`] extension trait); and the point functions of
@@ -61,6 +64,11 @@
 //! functions, `pown`), reverse operations, `mid`/`rad` and the
 //! ordering relations, Level 2 (text I/O, the datum model), and conformance
 //! against the ITF1788 vector suite. The roadmap
+//! known addition and always grade `trv`). Not yet present, and named rather
+//! than implied: the rest of the elementary set (the trigonometric and
+//! hyperbolic functions, `pow`), reverse operations, Level 2 (text I/O, the
+//! datum model, and a nearest-float `mid` over a correctly-rounded backend), and
+//! conformance against the ITF1788 vector suite. The roadmap
 //! is the full set-based flavor; what is implemented at any version is stated
 //! per module.
 //!
@@ -87,6 +95,8 @@ pub mod interval;
 pub mod ops;
 pub mod point;
 pub mod spec;
+#[cfg(feature = "fixture")]
+pub mod text_io;
 pub mod trig;
 
 #[cfg(all(kani, feature = "fixture"))]
@@ -95,6 +105,7 @@ mod kani_harness;
 pub use decorated::DecoratedInterval;
 pub use decoration::Decoration;
 pub use error::IntervalError;
+pub use functions::Overlap;
 pub use interval::Interval;
 // Re-exported from the foundation crate so downstream `impl RoundFloat for _`
 // (the SMIL/ferrodec backend) keeps resolving `interval_1788::RoundFloat`, and

@@ -8,6 +8,7 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Added
 
+<<<<<<< HEAD
 - The transcendental growth arms on `Interval<F>` and `DecoratedInterval<F>`, in a
   new `trig` module: `sin`, `cos`, `tan` (behind `F: RoundFloat + RoundTrig`),
   `sinh`, `cosh`, `tanh` (behind `F: RoundFloat + RoundHyperbolic`), and `pow` and
@@ -29,6 +30,83 @@ v1.0; before then the API may break between 0.x releases.
   `c-xsc.itl` vectors (as the sound enclosure relationship on the loose fixture)
   and adds pointwise-enclosure, full-period-shortcut, critical-point-stress,
   `cosh`-minimum, and pole-straddle property lanes. Workspace decision record 0005.
+=======
+- The text I/O surface, `interval-1788`'s Level 1 literal grammar for `f64`
+  (ledger item 8), behind the `fixture` feature and with its threat model named
+  in the module doc: the input is attacker-supplied bytes, and the worst it can
+  force is a `TextError` value or a sound enclosing interval, never a panic,
+  unbounded work, an allocation, or an unsound interval.
+  - `nums_to_interval` (the checked endpoint constructor's standard spelling) and
+    `text_to_interval` on `Interval<f64>` and `DecoratedInterval<f64>`, parsing
+    the bracketed forms (`[empty]`, `[entire]`, `[l, u]`, the half-open and point
+    forms, `[nai]`), the uncertain form (`m?`, `m?r`, one-sided `u`/`d`, the
+    infinite-radius `??`, with a trailing exponent), and decimal, hex-float, and
+    rational `p/q` number literals, with whitespace tolerance and case folding.
+    The decoration suffixes `_com`/`_dac`/`_def`/`_trv` are validated against the
+    literal's mathematical interval and combined with the stored interval's
+    strongest decoration by the lattice meet, so an overflowing literal demotes a
+    requested `com` to `dac`; `_ill` is reserved for `[nai]`.
+  - The rigor-critical core is a directed decimal-to-`f64` conversion. Every
+    finite literal reduces to a signed ratio of integers, and an allocation-free
+    fixed-capacity big integer rounds it to the directed endpoint by exact long
+    division: the lower endpoint toward minus infinity, the upper toward plus
+    infinity, tightest, with the exactness decision made entirely in integer
+    arithmetic (no floating point in the comparison). Hex literals are exact by
+    construction through the same division with a power-of-two denominator. Work
+    is bounded by three named length caps; over-length input is a `TextError`.
+  - Output: a `Display` for `Interval<f64>` (`intervalToText`, whose reread
+    encloses) and the exact pair `interval_to_exact` / `exact_to_interval` (clause
+    13.4), which round-trips any interval bit-for-bit through its hex-float text.
+    The output side has zero corpus coverage (registry gap 2), so its correctness
+    rests on the round-trip properties in the test lane, which the module doc
+    records as the substitute for the missing vectors.
+  - The failures the standard raises as the `UndefinedOperation` signal are
+    reported as `Result::Err` instead (a documented divergence); a
+    `PossiblyUndefinedOperation` case is a valid `Ok` result. The `[nai]` literal
+    is the returned `NaI` value.
+  - `tests/text_io_fixture.rs`: the constructor, exception, and class
+    `textToInterval`/`numsToInterval` vectors transcribed (valid, malformed,
+    decorated, hex, and uncertain), the exceptions-file signals mapped to `Err`,
+    plus property lanes: the exact hex round-trip, `Display` reread enclosure, the
+    directed decimal core bracketing the correctly-rounded `str::parse` oracle to
+    one ulp (including at the subnormal and overflow edges), and a no-panic lane
+    over random ASCII bytes.
+
+- The numeric and boolean function completion (the Phase C deferrals).
+  - Numeric `mid`, `rad`, and `mid_rad` on `Interval<F>`, each `Option` (`None`
+    for the empty interval). `mid_rad` is the core; `mid` and `rad` project it, so
+    the radius always matches the emitted midpoint. The defining property
+    `[mid - rad, mid + rad]` encloses the interval holds structurally: the radius
+    is the larger one-sided distance to the actual midpoint, rounded up. The
+    midpoint is overflow-safe (the halved form `inf/2 + sup/2`, never `(inf + sup)
+    / 2`). `Entire` centers at zero, a singleton at its point, a
+    symmetric-about-zero interval at zero, each exactly. A directed-rounding
+    surface cannot reproduce the Level 2 nearest-float datum in general, nor reach
+    the `realmax` a half-unbounded interval pins (no largest-finite constant on
+    `RoundFloat`); those return the finite endpoint with an infinite radius (sound,
+    documented at `mid_rad`), and the tightest midpoint is deferred to the
+    conformance lane over a correctly-rounded backend.
+  - The boolean orderings `equal`, `less`, `strict_less`, `precedes`, and
+    `strict_precedes` on `Interval<F>`, exact endpoint comparisons with the empty
+    conventions the vectors pin (`less` and `strict_less`: both empty true, one
+    empty false; `precedes` and `strict_precedes`: any empty true; `equal`
+    coincides with `PartialEq`). The two strict forms treat matching infinite
+    endpoints as satisfying the strict clause.
+  - The sixteen-state `overlap` relation: a new public `enum Overlap` and
+    `Interval::overlap`, the standard's mutually exclusive Allen-algebra states by
+    pure endpoint case analysis. Exhaustiveness is guaranteed by a total match over
+    the two gap tests plus the nine three-way endpoint-comparison combinations.
+  - Decorated forms of all eight orderings and `overlap` on `DecoratedInterval<F>`,
+    reading the interval part; the boolean relations return false when either
+    operand is `NaI`, per the vectors.
+  - Test lane `tests/numeric_boolean_fixture.rs` transcribes the ITF1788
+    `libieeep1788_num.itl`, `libieeep1788_bool.itl`, and
+    `libieeep1788_overlap.itl` vectors (numeric functions pinned exactly where the
+    derivation guarantees it, the enclosure property asserted otherwise; the
+    orderings and overlap pinned exactly, empty tables included) and adds the
+    enclosure-property, midpoint-membership, ordering-coherence, and
+    overlap-consistency property lanes.
+>>>>>>> feat/text-io
 - The cancellative operations `cancel_minus` and `cancel_plus` on `Interval<F>`
   and `DecoratedInterval<F>` (bare `F: RoundFloat`). `cancel_minus(x, y)` recovers
   the tightest `z` with `y + z` enclosing `x`; `cancel_plus(x, y)` is
@@ -114,8 +192,9 @@ v1.0; before then the API may break between 0.x releases.
   - Property tests including inclusion isotonicity for `+`, `-`, `*` (the
     monotonicity half of the fundamental theorem), intersection contained in both
     operands, convex hull containing both, and `disjoint` iff empty intersection.
-  - Deferred: `mid` and `rad`, and the ordering relations (`less`, `precedes` and
-    their strict forms), pending the Level 2 conventions for their empty and
+  - Then deferred, now completed above (see the Unreleased entry): `mid` and
+    `rad`, and the ordering relations (`equal`, `less`, `precedes` and their
+    strict forms), which needed the Level 2 conventions for their empty and
     unbounded cases.
 
 - Phase D, decorations.
