@@ -683,6 +683,14 @@ fn fixture_inverse_trig_brackets_correct_rounding() {
         );
     }
     // atan over many magnitudes, including where it saturates toward +-pi/2.
+    // The sweep has three phases, each finite, so the loop terminates: the
+    // negative arm shrinks geometrically from -1e12 to inside (-1, 1) (about 23
+    // division steps), the additive arm crosses [-1, 1] in at most 7 steps of
+    // 0.31, and the positive arm grows geometrically past 1e12 (about 23
+    // multiplication steps); roughly 53 oracle calls in all, inside the budget
+    // above. (A single multiplicative step from a negative start diverges to
+    // -inf and never exits the loop; that was a committed bug this phrasing
+    // replaces.)
     let mut x = -1.0e12_f64;
     while x <= 1.0e12 {
         let (lo, hi) = atan_bracket(x);
@@ -690,7 +698,13 @@ fn fixture_inverse_trig_brackets_correct_rounding() {
             x.atan_down() <= lo && hi <= x.atan_up(),
             "atan bracket lost at x = {x}"
         );
-        x = if x.abs() < 1.0 { x + 0.31 } else { x * 3.4 };
+        x = if x.abs() < 1.0 {
+            x + 0.31
+        } else if x < 0.0 {
+            x / 3.4
+        } else {
+            x * 3.4
+        };
     }
 }
 
