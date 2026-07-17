@@ -8,7 +8,21 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Added
 
-<<<<<<< HEAD
+- The elementary battery round two on `Interval<F>` and `DecoratedInterval<F>`,
+  in a new `inverse` module: `asin`, `acos`, `atan`, `atan2` (behind
+  `F: RoundInverseTrig`), `asinh`, `acosh`, `atanh` (behind
+  `F: RoundInverseHyperbolic`), `exp2`, `exp10`, `log2`, `log10` (behind
+  `F: RoundExpBases`), and `pown` over bare `RoundFloat` as directed integer
+  power chains with the negative exponent taken as the set-level reciprocal. Ten
+  arms are monotone endpoint images with set-based domain restriction (`acos`
+  antitone); `atan2` is a directed corner reduction derived from the vanishing
+  gradient, with the full-hull branch-cut crossing, the `+0` normalization for
+  the `+pi` convention, and the origin dropping the decoration to `trv`. Test
+  lanes `tests/inverse_fixture.rs` and `tests/atan2_fixture.rs` transcribe the
+  ITF1788 `libieeep1788_elem.itl` and `atan2.itl` vectors. The three new traits
+  are re-exported beside `RoundFloat`, as is `RoundReduction` for the
+  conformance surface. Workspace decision record 0007.
+
 - The transcendental growth arms on `Interval<F>` and `DecoratedInterval<F>`, in a
   new `trig` module: `sin`, `cos`, `tan` (behind `F: RoundFloat + RoundTrig`),
   `sinh`, `cosh`, `tanh` (behind `F: RoundFloat + RoundHyperbolic`), and `pow` and
@@ -30,7 +44,6 @@ v1.0; before then the API may break between 0.x releases.
   `c-xsc.itl` vectors (as the sound enclosure relationship on the loose fixture)
   and adds pointwise-enclosure, full-period-shortcut, critical-point-stress,
   `cosh`-minimum, and pole-straddle property lanes. Workspace decision record 0005.
-=======
 - The text I/O surface, `interval-1788`'s Level 1 literal grammar for `f64`
   (ledger item 8), behind the `fixture` feature and with its threat model named
   in the module doc: the input is attacker-supplied bytes, and the worst it can
@@ -106,7 +119,6 @@ v1.0; before then the API may break between 0.x releases.
     orderings and overlap pinned exactly, empty tables included) and adds the
     enclosure-property, midpoint-membership, ordering-coherence, and
     overlap-consistency property lanes.
->>>>>>> feat/text-io
 - The cancellative operations `cancel_minus` and `cancel_plus` on `Interval<F>`
   and `DecoratedInterval<F>` (bare `F: RoundFloat`). `cancel_minus(x, y)` recovers
   the tightest `z` with `y + z` enclosing `x`; `cancel_plus(x, y)` is
@@ -219,6 +231,16 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Changed
 
+- `mid`, `rad`, and `mid_rad` now sit behind the `RoundLargestFinite` capability
+  bound and follow IEEE 1788's Level 2 realmax convention on half-unbounded
+  intervals: `mid([a, +inf]) = +LARGEST_FINITE`, `mid([-inf, b]) =
+  -LARGEST_FINITE`, radius infinite, replacing the previous sound
+  finite-endpoint approximation; the previously unreachable midpoint vectors are
+  pinned bit-exact. Workspace decision record 0009.
+- The decorated `exp` and `ln` wrappers drop their inline unbounded-result
+  demotion, subsumed by the uniform demotion at the `pack` seam; behavior is
+  unchanged, and the `ln` documentation now states the actual domain-check path
+  (an input reaching zero grades `trv`; `ln` has no overflow demotion path).
 - `RoundFloat` moved to the new `round-float` foundation crate and is re-exported
   here as `interval_1788::RoundFloat`, so downstream `impl RoundFloat for _`
   (the SMIL/ferrodec backend) keeps compiling unchanged. The `fixture` feature

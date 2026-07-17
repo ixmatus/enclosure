@@ -202,3 +202,20 @@ The backend gets its own lane, one tier at a time:
   CBMC finding inherited by obligation 6).
 - Beads: enc-aet (this design), enc-ebd (the oracle crate this lane grows
   into), enc-ac4 (the conformance lane consumer).
+
+## Addendum
+
+**2026-07-17: obligation 5 discharged, with the reference source corrected.**
+The nightly oracle lane for the arithmetic surface landed in the enc-ebd
+oracle crate growth as obligation 5 planned, with one correction to this
+record's naming: pfloat-libm exposes no bare arithmetic, so the correctly
+rounded directed reference for `add`/`sub`/`mul`/`div` (and the `recip`/`sqr`
+specializations) is the base `pfloat` crate's `BigFloat` at the same pinned
+revision (exact dyadic results computed above their bit width with the inexact
+flag asserted clear, then one directed rounding; quotients through nested
+directed rounding, which is safe where nearest double rounding is not), while
+`sqrt` reads pfloat-libm's `sqrt_round` directly. The lane certifies tightness
+on `TightF64` and enclosure on the fixture; division by zero and negative
+square roots are recorded coverage gaps (pole and domain edges, not rounding
+hazards). Details in the oracle crate's module docs and the
+`pfloat-libm-oracle` registry entry.

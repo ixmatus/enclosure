@@ -17,6 +17,12 @@ consumers:
   - crates/round-float/src/f64_impl.rs (TRANSCENDENTAL_MARGIN rests on this statement)
   - crates/round-float/src/f64_impl.rs (the RoundTrig sin/cos/tan fixture; the trig
     margin leans on the Payne-Hanek reduction statement below, not the table line)
+  - crates/round-float/src/f64_impl.rs (the round-two RoundInverseTrig and
+    RoundExpBases fixtures for asin/acos/atan/atan2/exp2/exp10/log2/log10, which
+    the sub-1.5-ulp goal covers, so TRANSCENDENTAL_MARGIN's doctrine applies)
+  - crates/round-float/src/f64_impl.rs (ARC_HYPERBOLIC_MARGIN for asinh/acosh/atanh,
+    which do NOT rest on this goal: they are among the named exceptions, so the
+    margin is anchored to measured oracle error, not to this page)
   - crates/round-float/docs/decisions/0001-round-transcendental-extension-trait.md
   - docs/decisions/0007-transcendental-growth-round-two.md (the arc-hyperbolic exception is that record's load-bearing fact)
 verification:
@@ -72,3 +78,14 @@ a fixture margin to dominate. Transcendental growth round two
 oracle error with headroom rather than to this page, and says so at the
 constants; for every other round-two function (inverse trig, exp2/exp10,
 log2/log10) the sub 1.5 ulp goal covers and the shipped doctrine applies.
+
+Round two measured the anchor when it landed: over the arc-hyperbolic hazard
+grids (`acosh` approaching 1 where the result vanishes, `atanh` near zero,
+`asinh` across the line) the worst observed error of `libm` 0.2.16 against the
+correctly rounded `pfloat-libm` oracle (git rev `04c9761`) was 1 ulp. Folding
+in the oracle's own half ulp gives a true error bound near 1.5 ulp, which the
+pinned `ARC_HYPERBOLIC_MARGIN` of `16 * 2^-52` clears by more than tenfold. The
+margin is deliberately distinct from round one's `8 * 2^-52` so no unmeasured
+claim rides in silently, and the `fixture_arc_hyperbolic_brackets_correct_rounding`
+grid in the oracle lane keeps the measurement live: it is the anchor, not a
+check, for exactly this family.

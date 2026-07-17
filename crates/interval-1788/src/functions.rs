@@ -15,13 +15,18 @@
 //! intervals sit relative to each other" into the standard's sixteen mutually
 //! exclusive [`Overlap`] states, again by pure endpoint case analysis.
 //!
-//! `mid` and `rad` are the one place a directed-rounding surface cannot always
-//! reproduce the standard's Level 2 datum (the nearest float to the true
-//! midpoint). The implementation is the best sound approximation; the divergence
-//! is documented at [`mid_rad`](Interval::mid_rad).
+//! `mid`, `rad`, and `mid_rad` sit behind the [`RoundLargestFinite`] capability
+//! bound. IEEE 1788's Level 2 `mid` of a half-unbounded interval is the format's
+//! largest finite value (`mid([a, +inf]) = +realmax`,
+//! `mid([-inf, b]) = -realmax`), which a backend names as an exact constant. With
+//! that datum the half-unbounded midpoints follow the realmax convention exactly;
+//! the general bounded midpoint is the nearest-float datum on a correctly-rounded
+//! backend, and on the sound-not-tight `f64` fixture it keeps the enclosure but
+//! not the last-ulp tightness. The convention is stated at
+//! [`mid_rad`](Interval::mid_rad).
 
 use crate::interval::Interval;
-use round_float::RoundFloat;
+use round_float::{RoundFloat, RoundLargestFinite};
 
 /// Absolute value of an endpoint. Exact (a sign flip or nothing); maps an
 /// infinite endpoint to positive infinity. Endpoints are never NaN.
@@ -145,7 +150,14 @@ impl<F: RoundFloat> Interval<F> {
             }
         })
     }
+}
 
+/// `mid`, `rad`, and `mid_rad` need the format's largest finite value for the
+/// half-unbounded Level 2 convention (`mid([a, +inf]) = +realmax`), so they carry
+/// the [`RoundLargestFinite`] bound; the plain [`RoundFloat`] numeric functions
+/// above and the boolean and set functions below do not (workspace decision
+/// record 0009).
+impl<F: RoundFloat + RoundLargestFinite> Interval<F> {
     /// A representable midpoint of the interval, paired with a radius that closes
     /// the enclosure: `[mid - rad, mid + rad]` contains every point of `self`.
     /// `None` for the empty interval (the standard's Level 2 returns NaN there).
@@ -175,22 +187,22 @@ impl<F: RoundFloat> Interval<F> {
     /// midpoint is a hair less accurate than `(inf + sup) / 2` would be. The
     /// radius absorbs it; the enclosure stays sound.
     ///
-    /// # Accuracy divergence from Level 2 (documented, not a bug)
+    /// # The Level 2 convention, by input shape
     ///
-    /// The standard's Level 2 `mid` demands the nearest float to the true
-    /// midpoint. The [`RoundFloat`] surface exposes only directed rounding (no
-    /// round-to-nearest primitive) and no largest-finite constant, so this
-    /// implementation cannot always emit that datum:
+    /// The reported midpoint follows IEEE 1788's Level 2 convention on every
+    /// input; the largest-finite datum the half-unbounded cases need is what the
+    /// [`RoundLargestFinite`] bound supplies, and it is why these three methods
+    /// carry that bound:
     ///
-    /// - The **exactly emitted** cases, correct on every sound backend: the empty
-    ///   interval (`None`), a singleton `[x, x]` (`mid = x`, `rad = 0`), an
-    ///   interval symmetric about zero (`mid = 0`), and `Entire` (`mid = 0`).
-    /// - **Half-unbounded** `[a, +inf]` or `[-inf, b]`: Level 2 pins `realmax` /
-    ///   `-realmax`, but no largest-finite constant is reachable through
-    ///   `RoundFloat`, so `mid` returns the finite endpoint, a sound value inside
-    ///   the interval. `rad` is `+inf` in these cases, so `[mid - rad, mid + rad]`
-    ///   is `Entire` and the enclosure holds trivially; only the reported
-    ///   midpoint datum diverges.
+    /// - **Empty**: `None` (the standard's Level 2 NaN).
+    /// - **Singleton** `[x, x]`: `mid = x`, `rad = 0`, exact on every backend.
+    /// - **Symmetric about zero** and **`Entire`**: `mid = 0`, exact.
+    /// - **Half-unbounded** `[a, +inf]`: `mid = +LARGEST_FINITE`; `[-inf, b]`:
+    ///   `mid = -LARGEST_FINITE`; `rad = +inf` in both. A finite endpoint is at
+    ///   most `LARGEST_FINITE` in magnitude, so the signed largest finite value is
+    ///   a member of the interval, and with an infinite radius
+    ///   `[mid - rad, mid + rad]` is the whole line; the enclosure holds trivially
+    ///   and the reported midpoint is the standard's datum bit-for-bit.
     /// - **General bounded** intervals: `mid` is the halved-form estimate above.
     ///   On a correctly-rounded backend a representable exact midpoint comes out
     ///   exact; on the deliberately sound-not-tight `f64` fixture the directed
@@ -205,16 +217,22 @@ impl<F: RoundFloat> Interval<F> {
 
         // Unbounded (nonempty): the Level 2 convention is a finite midpoint and an
         // infinite radius. `Entire` centers at zero exactly; a half-unbounded
-        // interval centers at its finite endpoint (see the accuracy note: the
-        // standard's realmax is unreachable through `RoundFloat`, and with an
-        // infinite radius any finite in-interval midpoint is sound).
+        // interval centers at the signed largest finite value, the standard's
+        // realmax datum reached through the `RoundLargestFinite` bound. With an
+        // infinite radius the enclosure is the whole line, so the midpoint's only
+        // obligation is membership, which the largest finite value meets (every
+        // finite endpoint is at most `LARGEST_FINITE` in magnitude).
         if !a_finite || !b_finite {
             let mid = if !a_finite && !b_finite {
+                // Entire: the exact midpoint is zero.
                 F::ZERO
-            } else if a_finite {
-                a
+            } else if !b_finite {
+                // Unbounded above, `[a, +inf]`: the positive largest finite value.
+                F::LARGEST_FINITE
             } else {
-                b
+                // Unbounded below, `[-inf, b]`: the negated largest finite value
+                // (`negate` is an exact sign flip).
+                F::LARGEST_FINITE.negate()
             };
             return Some((mid, F::INFINITY));
         }
@@ -254,8 +272,8 @@ impl<F: RoundFloat> Interval<F> {
     /// A representable midpoint of the interval. `None` for the empty interval.
     ///
     /// The midpoint paired with the radius from [`mid_rad`](Interval::mid_rad);
-    /// see that method for the exact-versus-approximate cases and the Level 2
-    /// accuracy divergence. Computed through `mid_rad` so the two always agree.
+    /// see that method for the half-unbounded realmax convention and the fixture's
+    /// bounded looseness. Computed through `mid_rad` so the two always agree.
     #[must_use]
     pub fn mid(self) -> Option<F> {
         self.mid_rad().map(|(mid, _)| mid)
@@ -269,7 +287,9 @@ impl<F: RoundFloat> Interval<F> {
     pub fn rad(self) -> Option<F> {
         self.mid_rad().map(|(_, rad)| rad)
     }
+}
 
+impl<F: RoundFloat> Interval<F> {
     /// Whether `self` is a subset of `other`. The empty set is a subset of every
     /// interval; no nonempty interval is a subset of the empty set.
     #[must_use]

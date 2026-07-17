@@ -5,7 +5,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = ["Parnell Springmeyer <parnell@digitalmentat.com>"]
 repository = "https://github.com/ixmatus/enclosure"
-description = "Nightly differential oracle: certifies affine-arith and round-float's exp/ln bounds enclose pfloat-libm's correctly-rounded values. Not a workspace member; needs nightly for pfloat."
+description = "Nightly differential oracle: certifies round-float's TightF64 arithmetic is correctly-rounded (tight) and that affine-arith's and the f64 fixture's exp/ln and arithmetic bounds enclose pfloat's correctly-rounded values. Not a workspace member; needs nightly for pfloat."
 publish = false
 
 # No runtime dependencies: the crate is a verification lane, all of whose work
@@ -13,15 +13,26 @@ publish = false
 [dependencies]
 
 [dev-dependencies]
-# The bounds under test (the f64 fixture's exp/ln and the affine elementary
-# surface), and the correctly-rounded reference they are checked against.
-round-float = { path = "../round-float", features = ["f64"] }
+# The bounds under test: the f64 fixture's exp/ln and arithmetic, the affine
+# elementary surface, and the tight binary64 backend (`TightF64`, behind the
+# additive `f64-tight` feature) whose directed arithmetic the arithmetic lane
+# certifies for tightness.
+round-float = { path = "../round-float", features = ["f64", "f64-tight"] }
 interval-1788 = { path = "../interval-1788" }
 affine-arith = { path = "../affine-arith", features = ["fixture"] }
 # pfloat-libm is a pure-Rust *correctly-rounded* libm, pinned to a public rev. It
 # requires nightly (pfloat's const-generic mantissa uses generic_const_exprs),
-# which is why this crate is workspace-excluded and nightly-pinned.
+# which is why this crate is workspace-excluded and nightly-pinned. It grounds
+# the elementary lane and supplies `sqrt_round`, the correctly-rounded directed
+# square root, for the arithmetic lane.
 pfloat-libm = { git = "https://github.com/ixmatus/pfloat.git", rev = "04c9761cccfc2724dd7d1c941a05840c9a3d9eca" }
+# The base pfloat crate at the same pinned rev supplies `BigFloat`, the
+# arbitrary-precision engine from which the arithmetic lane derives the
+# correctly-rounded directed reference for `add`, `sub`, `mul`, `div`, and their
+# `recip`/`sqr` specializations (pfloat-libm exposes no bare arithmetic). Cargo
+# unifies it with the copy pfloat-libm already builds, so no second source enters
+# the graph.
+pfloat = { git = "https://github.com/ixmatus/pfloat.git", rev = "04c9761cccfc2724dd7d1c941a05840c9a3d9eca", default-features = false, features = ["big"] }
 
 [lints.rust]
 unsafe_code = "forbid"

@@ -26,7 +26,10 @@
 //! uses `libm::sqrt`, which is correctly rounded, then steps outward the same
 //! way.
 
-use crate::{RoundFloat, RoundHyperbolic, RoundInteger, RoundPow, RoundTranscendental, RoundTrig};
+use crate::{
+    RoundExpBases, RoundFloat, RoundHyperbolic, RoundInteger, RoundInverseHyperbolic,
+    RoundInverseTrig, RoundLargestFinite, RoundPow, RoundTranscendental, RoundTrig,
+};
 
 impl RoundFloat for f64 {
     const INFINITY: Self = f64::INFINITY;
@@ -99,6 +102,10 @@ impl RoundFloat for f64 {
     fn is_zero(self) -> bool {
         self == 0.0
     }
+}
+
+impl RoundLargestFinite for f64 {
+    const LARGEST_FINITE: Self = f64::MAX;
 }
 
 /// Relative margin that turns `libm`'s faithfully-rounded `exp`/`log` into a
@@ -579,9 +586,321 @@ impl RoundPow for f64 {
     }
 }
 
+/// The π enclosure, shared by the inverse-trig impl below and duplicating the
+/// [`RoundTrig`] pair by workspace decision record 0007's accepted trade.
+const PI_DOWN: f64 = core::f64::consts::PI;
+/// The upper end of the π enclosure: the successor of the nearest float to π,
+/// which lies below π (see the `RoundTrig::pi_down` note).
+fn pi_up_const() -> f64 {
+    core::f64::consts::PI.next_up()
+}
+
+/// The upper end of the π/2 enclosure: the successor of `FRAC_PI_2`, the nearest
+/// float to π/2, which lies below π/2 (as `PI` lies below π). A sound upper bound
+/// on π/2 and, since no float lies between `FRAC_PI_2` and its successor, the
+/// tightest one; its negation is the sound lower bound on −π/2.
+fn half_pi_up_const() -> f64 {
+    core::f64::consts::FRAC_PI_2.next_up()
+}
+
+impl RoundInverseTrig for f64 {
+    #[inline]
+    fn asin_down(self) -> Self {
+        let r = libm::asin(self);
+        if r.is_nan() {
+            // Outside [-1, 1]: the caller owns the domain, libm's NaN passes.
+            return r;
+        }
+        // Range clamp: asin's image is [-pi/2, pi/2] (a theorem), so a widened
+        // lower bound below -half_pi_up is raised back; -half_pi_up <= -pi/2 is a
+        // sound floor. This restores tightness at the saturating endpoint
+        // asin(-1) = -pi/2.
+        clamp_low(widen_down(r), -half_pi_up_const())
+    }
+
+    #[inline]
+    fn asin_up(self) -> Self {
+        let r = libm::asin(self);
+        if r.is_nan() {
+            return r;
+        }
+        clamp_high(widen_up(r), half_pi_up_const())
+    }
+
+    #[inline]
+    fn acos_down(self) -> Self {
+        let r = libm::acos(self);
+        if r.is_nan() {
+            return r;
+        }
+        // Range clamp: acos's image is [0, pi], so 0 is a sound floor (attained at
+        // acos(1) = 0) and pi_up a sound ceiling (attained-within-ulp at
+        // acos(-1) = pi).
+        clamp_low(widen_down(r), 0.0)
+    }
+
+    #[inline]
+    fn acos_up(self) -> Self {
+        let r = libm::acos(self);
+        if r.is_nan() {
+            return r;
+        }
+        clamp_high(widen_up(r), pi_up_const())
+    }
+
+    #[inline]
+    fn atan_down(self) -> Self {
+        // atan is defined on the whole line and total; libm::atan of +-inf is
+        // +-pi/2, which the clamp keeps inside the pi/2 bracket. The range is the
+        // open (-pi/2, pi/2), so clamping into the closed bracket is sound.
+        clamp_low(widen_down(libm::atan(self)), -half_pi_up_const())
+    }
+
+    #[inline]
+    fn atan_up(self) -> Self {
+        clamp_high(widen_up(libm::atan(self)), half_pi_up_const())
+    }
+
+    #[inline]
+    fn atan2_down(self, other: Self) -> Self {
+        // atan2's image is (-pi, pi], so pi_up is a sound ceiling and -pi_up a
+        // sound floor. libm::atan2 handles signed zeros and infinities; the
+        // interval layer owns the origin's set semantics and normalizes a zero
+        // ordinate to +0 before calling, so the +pi convention on the negative
+        // x-axis holds.
+        let r = libm::atan2(self, other);
+        if r.is_nan() {
+            return r;
+        }
+        clamp_low(widen_down(r), -pi_up_const())
+    }
+
+    #[inline]
+    fn atan2_up(self, other: Self) -> Self {
+        let r = libm::atan2(self, other);
+        if r.is_nan() {
+            return r;
+        }
+        clamp_high(widen_up(r), pi_up_const())
+    }
+
+    #[inline]
+    fn pi_down() -> Self {
+        PI_DOWN
+    }
+
+    #[inline]
+    fn pi_up() -> Self {
+        pi_up_const()
+    }
+}
+
+/// Relative margin for the arc-hyperbolic fixtures (`asinh`, `acosh`, `atanh`).
+///
+/// Unlike `exp`/`log` and the round-two functions covered by musl's sub-1.5-ulp
+/// goal, the arc hyperbolics sit among the *named exceptions* to that goal (see
+/// the `musl-libm-accuracy` reference entry): musl states no accuracy target for
+/// them, so there is no external claim for a fixture margin to dominate. This
+/// margin's anchor is therefore EMPIRICAL, per workspace decision record 0007
+/// part 2. It was pinned from the worst observed error of `libm` 0.2.16's
+/// `asinh`/`acosh`/`atanh` against the correctly-rounded `pfloat-libm` oracle
+/// (git rev `04c9761`) over the hazard grids of `crates/elementary-oracle`: the
+/// worst observed error was 1 ulp (`acosh` approaching 1 where the result
+/// vanishes, and `atanh` near zero, were the stressing cases). Folding in the
+/// oracle's own 0.5 ulp gives a true-error bound near 1.5 ulp, and this relative
+/// `16 * 2^-52` widening clears that by more than tenfold at every magnitude,
+/// well past the fivefold the record requires, while staying distinct from round
+/// one's `8 * 2^-52` so no unmeasured claim rides in silently. The nightly oracle
+/// lane is not a discharge of an assumption here; it IS the assumption, and it
+/// names the measured `libm` version. A regression in a future `libm` arc
+/// hyperbolic would be caught only by that lane.
+const ARC_HYPERBOLIC_MARGIN: f64 = 16.0 * f64::EPSILON;
+
+/// Widen a finite faithfully-rounded arc-hyperbolic result outward to an upper
+/// bound, the [`widen_up`] shape with the empirical [`ARC_HYPERBOLIC_MARGIN`].
+#[inline]
+fn widen_arc_up(r: f64) -> f64 {
+    r.add_up(magnitude(r).mul_up(ARC_HYPERBOLIC_MARGIN))
+        .next_up()
+}
+
+/// Companion of [`widen_arc_up`]: a lower bound.
+#[inline]
+fn widen_arc_down(r: f64) -> f64 {
+    r.sub_down(magnitude(r).mul_up(ARC_HYPERBOLIC_MARGIN))
+        .next_down()
+}
+
+impl RoundInverseHyperbolic for f64 {
+    #[inline]
+    fn asinh_down(self) -> Self {
+        if !self.is_finite() {
+            // asinh(+-inf) = +-inf, asinh(NaN) = NaN; the interval layer maps an
+            // infinite endpoint directly, so this guard covers a direct caller.
+            return self;
+        }
+        widen_arc_down(libm::asinh(self))
+    }
+
+    #[inline]
+    fn asinh_up(self) -> Self {
+        if !self.is_finite() {
+            return self;
+        }
+        widen_arc_up(libm::asinh(self))
+    }
+
+    #[inline]
+    fn acosh_down(self) -> Self {
+        let r = libm::acosh(self);
+        if r.is_nan() {
+            // self < 1 is out of domain; the caller owns the precondition.
+            return r;
+        }
+        if r.is_infinite() {
+            // self = +inf: acosh(+inf) = +inf, a sound (attained) lower bound.
+            return r;
+        }
+        // Range clamp: acosh's image is [0, +inf), so 0 is a sound floor,
+        // attained at acosh(1) = 0.
+        clamp_low(widen_arc_down(r), 0.0)
+    }
+
+    #[inline]
+    fn acosh_up(self) -> Self {
+        let r = libm::acosh(self);
+        if r.is_nan() || r.is_infinite() {
+            return r;
+        }
+        widen_arc_up(r)
+    }
+
+    #[inline]
+    fn atanh_down(self) -> Self {
+        let r = libm::atanh(self);
+        if !r.is_finite() {
+            // atanh(-1) = -inf, atanh(1) = +inf, atanh(|self| > 1) = NaN; the
+            // caller owns the (-1, 1) domain and the interval layer owns the
+            // unbounded results at the open endpoints.
+            return r;
+        }
+        widen_arc_down(r)
+    }
+
+    #[inline]
+    fn atanh_up(self) -> Self {
+        let r = libm::atanh(self);
+        if !r.is_finite() {
+            return r;
+        }
+        widen_arc_up(r)
+    }
+}
+
+impl RoundExpBases for f64 {
+    #[inline]
+    fn exp2_down(self) -> Self {
+        let r = libm::exp2(self);
+        if r.is_nan() {
+            r
+        } else if r == 0.0 {
+            // 2^x > 0 everywhere: zero is a sound lower bound on underflow.
+            0.0
+        } else if r.is_infinite() {
+            // Overflow: the largest finite float is a sound finite lower bound.
+            f64::MAX
+        } else {
+            widen_down(r)
+        }
+    }
+
+    #[inline]
+    fn exp2_up(self) -> Self {
+        let r = libm::exp2(self);
+        if r.is_nan() || r.is_infinite() {
+            r
+        } else if r == 0.0 {
+            (0.0_f64).next_up()
+        } else {
+            widen_up(r)
+        }
+    }
+
+    #[inline]
+    fn exp10_down(self) -> Self {
+        let r = libm::exp10(self);
+        if r.is_nan() {
+            r
+        } else if r == 0.0 {
+            0.0
+        } else if r.is_infinite() {
+            f64::MAX
+        } else {
+            widen_down(r)
+        }
+    }
+
+    #[inline]
+    fn exp10_up(self) -> Self {
+        let r = libm::exp10(self);
+        if r.is_nan() || r.is_infinite() {
+            r
+        } else if r == 0.0 {
+            (0.0_f64).next_up()
+        } else {
+            widen_up(r)
+        }
+    }
+
+    #[inline]
+    fn log2_down(self) -> Self {
+        let r = libm::log2(self);
+        if r.is_finite() {
+            widen_down(r)
+        } else {
+            // self <= 0 out of domain (NaN for negative, -inf at zero); self = +inf
+            // gives +inf. The caller owns self > 0; pass the sentinel through.
+            r
+        }
+    }
+
+    #[inline]
+    fn log2_up(self) -> Self {
+        let r = libm::log2(self);
+        if r.is_finite() {
+            widen_up(r)
+        } else {
+            r
+        }
+    }
+
+    #[inline]
+    fn log10_down(self) -> Self {
+        let r = libm::log10(self);
+        if r.is_finite() {
+            widen_down(r)
+        } else {
+            r
+        }
+    }
+
+    #[inline]
+    fn log10_up(self) -> Self {
+        let r = libm::log10(self);
+        if r.is_finite() {
+            widen_up(r)
+        } else {
+            r
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::{RoundHyperbolic, RoundInteger, RoundPow, RoundTranscendental, RoundTrig};
+    use crate::{
+        RoundExpBases, RoundHyperbolic, RoundInteger, RoundInverseHyperbolic, RoundInverseTrig,
+        RoundPow, RoundTranscendental, RoundTrig,
+    };
     use core::f64::consts::{E, LN_2};
 
     /// The bracket straddles the central libm value (a necessary condition for
@@ -692,8 +1011,8 @@ mod tests {
     #[test]
     #[allow(clippy::float_cmp)]
     fn pi_bracket_encloses_the_true_pi() {
-        let lo = f64::pi_down();
-        let hi = f64::pi_up();
+        let lo = <f64 as RoundTrig>::pi_down();
+        let hi = <f64 as RoundTrig>::pi_up();
         // The true pi to 30 significant digits is 3.14159265358979323846264338328;
         // the binary64 nearest is 3.14159265358979311599796346854 (below pi), and
         // its successor is 3.14159265358979356009063455953 (above pi). So the pair
@@ -812,5 +1131,88 @@ mod tests {
         // domain, caller/interval owns the precondition).
         assert!((-8.0_f64).rootn_down(3) <= -2.0 && -2.0 <= (-8.0_f64).rootn_up(3));
         assert!((-8.0_f64).rootn_down(2).is_nan());
+    }
+
+    // The saturation assertions compare against exact clamp endpoints (theorems
+    // about the range), which the float_cmp lint (aimed at rounded values) does
+    // not apply to.
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn inverse_trig_brackets_and_range_clamps() {
+        let half_pi_up = core::f64::consts::FRAC_PI_2.next_up();
+        for &x in &[-1.0, -0.5, -0.1, 0.0, 0.3, 0.7, 1.0] {
+            assert!(x.asin_down() <= libm::asin(x) && libm::asin(x) <= x.asin_up());
+            assert!(x.acos_down() <= libm::acos(x) && libm::acos(x) <= x.acos_up());
+            // Range clamps: asin in [-pi/2, pi/2], acos in [0, pi].
+            assert!(x.asin_down() >= -half_pi_up && x.asin_up() <= half_pi_up);
+            assert!(x.acos_down() >= 0.0 && x.acos_up() <= core::f64::consts::PI.next_up());
+        }
+        for &x in &[-1.0e12, -3.0, 0.0, 2.5, 1.0e12] {
+            assert!(x.atan_down() <= libm::atan(x) && libm::atan(x) <= x.atan_up());
+            assert!(x.atan_down() >= -half_pi_up && x.atan_up() <= half_pi_up);
+        }
+        // Saturation: asin(1) = pi/2, acos(-1) = pi clamp to the tight far bound.
+        assert!(1.0_f64.asin_up() == half_pi_up);
+        assert!((-1.0_f64).acos_up() == core::f64::consts::PI.next_up());
+        // Out of domain passes the libm sentinel.
+        assert!(2.0_f64.asin_down().is_nan());
+    }
+
+    #[test]
+    fn atan2_brackets_quadrants_and_branch() {
+        let pi_up = core::f64::consts::PI.next_up();
+        for &(y, x) in &[
+            (1.0, 1.0),
+            (1.0, -1.0),
+            (-1.0, 1.0),
+            (-1.0, -1.0),
+            (2.0, 0.0),
+            (-2.0, 0.0),
+            (0.0, -1.0),
+        ] {
+            let r = libm::atan2(y, x);
+            assert!(
+                y.atan2_down(x) <= r && r <= y.atan2_up(x),
+                "atan2 bracket at ({y}, {x})"
+            );
+            // Range clamp into (-pi, pi].
+            assert!(y.atan2_down(x) >= -pi_up && y.atan2_up(x) <= pi_up);
+        }
+    }
+
+    #[test]
+    fn inverse_hyperbolic_brackets_and_floor() {
+        for &x in &[-3.0, -0.5, 0.0, 0.5, 3.0] {
+            assert!(x.asinh_down() <= libm::asinh(x) && libm::asinh(x) <= x.asinh_up());
+        }
+        for &x in &[1.0, 1.0 + 1.0e-12, 2.0, 100.0] {
+            assert!(x.acosh_down() <= libm::acosh(x) && libm::acosh(x) <= x.acosh_up());
+            assert!(x.acosh_down() >= 0.0, "acosh floor at {x}");
+        }
+        // acosh(1) = 0 exactly after the floor clamp.
+        assert!(1.0_f64.acosh_down() == 0.0);
+        for &x in &[-0.9, -0.1, 0.0, 0.1, 0.9] {
+            assert!(x.atanh_down() <= libm::atanh(x) && libm::atanh(x) <= x.atanh_up());
+        }
+        // Open-domain endpoints diverge; out of domain passes the sentinel.
+        assert!(1.0_f64.atanh_up().is_infinite());
+        assert!(0.5_f64.acosh_down().is_nan());
+    }
+
+    #[test]
+    fn exp_bases_and_log_bases_brackets() {
+        for &x in &[-3.5, -1.0, 0.0, 1.0, 5.0, 10.0] {
+            assert!(x.exp2_down() <= libm::exp2(x) && libm::exp2(x) <= x.exp2_up());
+            assert!(x.exp10_down() <= libm::exp10(x) && libm::exp10(x) <= x.exp10_up());
+            assert!(x.exp2_down() >= 0.0 && x.exp10_down() >= 0.0);
+        }
+        for &x in &[1.0e-8, 0.5, 1.0, 2.0, 1024.0, 1.0e9] {
+            assert!(x.log2_down() <= libm::log2(x) && libm::log2(x) <= x.log2_up());
+            assert!(x.log10_down() <= libm::log10(x) && libm::log10(x) <= x.log10_up());
+        }
+        // Overflow and domain edges.
+        assert!(1024.0_f64.exp2_down().is_finite() && 1024.0_f64.exp2_up().is_infinite());
+        assert!(0.0_f64.log2_up().is_infinite() && 0.0_f64.log2_up() < 0.0);
+        assert!((-1.0_f64).log10_down().is_nan());
     }
 }

@@ -186,3 +186,15 @@ choice, not the fast one, and that ordering is deliberate.
   inherits); workspace ADR-0005 (the vacuous-defaults rejection this
   trait's honesty rule extends).
 - Beads: enc-k8l (this design), enc-ac4 (the conformance lane consumer).
+
+## Errata
+
+**2026-07-17: the corpus holds 15 reduction assertions, not 16.** This record
+twice states that the corpus tests the reductions with 16 assertions. The
+vendored `libieeep1788_reduction.itl` holds 15 (three `sum`, three `sumAbs`,
+three `sumSquare`, six `dot`); the 16 conflated the trait's method count (four
+operations in four modes) with the assertion count. The implementing slice
+transcribed all 15 and corrected the registry entry; the original text above
+stands as written. The design consequences are untouched: the corpus still
+pins only the nearest variants, and the cancellation dot that motivated the
+accumulator is among the 15.

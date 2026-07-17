@@ -65,6 +65,12 @@ mod tight_f64;
 #[cfg(feature = "f64-tight")]
 pub use tight_f64::TightF64;
 
+// The integer Kulisch accumulator carrying `TightF64`'s `RoundReduction` instance.
+// The trait itself is defined below unconditionally, so any backend may implement
+// it without the tight feature; only the `TightF64` implementation is gated.
+#[cfg(feature = "f64-tight")]
+mod kulisch;
+
 /// A floating-point type that supports the outward-directed arithmetic rigorous
 /// enclosure methods are built on.
 ///
@@ -148,6 +154,30 @@ pub trait RoundFloat: Copy + PartialOrd {
             self
         }
     }
+}
+
+/// The format's largest finite value, layered above [`RoundFloat`] as an exact
+/// associated constant.
+///
+/// A backend implements this to unlock the interval layer's `mid`, `rad`, and
+/// `mid_rad` on half-unbounded inputs. IEEE 1788's Level 2 `mid` of an interval
+/// unbounded on one side is the format's largest finite value
+/// (`mid([a, +inf]) = +realmax`, `mid([-inf, b]) = -realmax`), so a backend that
+/// cannot name that value cannot supply the standard's `mid` there. The datum is
+/// exact format metadata, like [`ZERO`](RoundFloat::ZERO),
+/// [`ONE`](RoundFloat::ONE), and [`INFINITY`](RoundFloat::INFINITY) on the core:
+/// naming the largest finite value involves no rounding direction and no
+/// approximation, so it is a constant, not a directed method pair.
+///
+/// It rides a separate extension trait rather than the core because the core is
+/// frozen. A required constant on [`RoundFloat`] would break every out-of-tree
+/// backend the moment it landed, the same argument that keeps the transcendental
+/// and integer-rounding families off the core. A backend opts in by supplying the
+/// one constant, exactly as it opts into [`RoundTranscendental`] or
+/// [`RoundInteger`]. See workspace decision record 0009.
+pub trait RoundLargestFinite: RoundFloat {
+    /// The format's largest finite value, exactly.
+    const LARGEST_FINITE: Self;
 }
 
 /// Outward-directed transcendental functions, layered above [`RoundFloat`].
@@ -313,10 +343,13 @@ pub trait RoundTrig: RoundFloat {
 /// less than or equal to the exact real `sinh(self)` and
 /// [`sinh_up`](RoundHyperbolic::sinh_up) one greater than or equal to it;
 /// likewise for `cosh` and `tanh`. The result of `cosh` is at least `1`, of
-/// `tanh` in `(-1, 1)`, and of `sinh` in the extended reals (an argument past the
-/// overflow shoulder gives the `[largest_finite, +inf]` style bounds the exp
-/// fixture established). Soundness is the obligation; tightness is a backend
-/// quality.
+/// `tanh` in the closed interval `[-1, 1]`, and of `sinh` in the extended reals
+/// (an argument past the overflow shoulder gives the `[largest_finite, +inf]`
+/// style bounds the exp fixture established). The `tanh` range is closed
+/// deliberately: the true `tanh` lies strictly inside `(-1, 1)`, but at the
+/// saturation shoulders it approaches `±1` closer than one ulp, so the
+/// endpoint is the tightest sound far bound (see workspace decision record
+/// 0005, errata). Soundness is the obligation; tightness is a backend quality.
 pub trait RoundHyperbolic: RoundFloat {
     /// A lower bound on the exact `sinh(self)`.
     fn sinh_down(self) -> Self;
@@ -367,4 +400,234 @@ pub trait RoundPow: RoundFloat {
     /// An upper bound on the exact `n`-th root `self^(1/n)` (requires `n >= 1`; an
     /// even `n` requires `self >= 0`).
     fn rootn_up(self, n: u32) -> Self;
+}
+
+/// Outward-directed inverse trigonometric functions, layered above
+/// [`RoundFloat`].
+///
+/// The family is `asin`, `acos`, `atan`, and the two-argument `atan2`, plus the
+/// same π enclosure [`RoundTrig`] carries. π rides this trait for the same
+/// reason it rides [`RoundTrig`]: the range clamps of the inverse functions are
+/// stated in π (`asin`/`atan` into the ±π/2 brackets, `acos` into `[0, π]`,
+/// `atan2` into `(-π, π]`), and a backend implementing only this family owes
+/// only this enclosure. A backend implementing both `RoundTrig` and this trait
+/// supplies the π pair twice; the duplication is the accepted cost of keeping
+/// the traits independent, exactly the [`RoundTrig`] `floor` trade. See
+/// workspace decision record 0007.
+///
+/// # The contract each method must honor, and the caller-owned domains
+///
+/// For a finite `self`, [`asin_down`](RoundInverseTrig::asin_down) returns a
+/// float less than or equal to the exact real `asin(self)` and
+/// [`asin_up`](RoundInverseTrig::asin_up) one greater than or equal to it;
+/// likewise for `acos` and `atan`. `asin` and `acos` are defined on `[-1, 1]`,
+/// `atan` on the whole line. An out-of-domain argument to `asin`/`acos` is the
+/// caller's to guard: the f64 fixture passes `libm`'s NaN through, and the
+/// interval layer owns the domain restriction. [`atan2_down`](RoundInverseTrig::atan2_down)
+/// and [`atan2_up`](RoundInverseTrig::atan2_up) bound `atan2(self, other)`, the
+/// principal angle of the point `(other, self)` with `self` the ordinate (`y`)
+/// and `other` the abscissa (`x`), matching `f64::atan2`; the origin `(0, 0)` is
+/// outside the domain and the interval layer owns its set semantics. Soundness
+/// (the bound is never on the wrong side) is the obligation; tightness is a
+/// quality a correctly-rounded backend may add.
+pub trait RoundInverseTrig: RoundFloat {
+    /// A lower bound on the exact `asin(self)` (requires `self` in `[-1, 1]`).
+    fn asin_down(self) -> Self;
+    /// An upper bound on the exact `asin(self)` (requires `self` in `[-1, 1]`).
+    fn asin_up(self) -> Self;
+    /// A lower bound on the exact `acos(self)` (requires `self` in `[-1, 1]`).
+    fn acos_down(self) -> Self;
+    /// An upper bound on the exact `acos(self)` (requires `self` in `[-1, 1]`).
+    fn acos_up(self) -> Self;
+    /// A lower bound on the exact `atan(self)`.
+    fn atan_down(self) -> Self;
+    /// An upper bound on the exact `atan(self)`.
+    fn atan_up(self) -> Self;
+    /// A lower bound on the exact `atan2(self, other)` (the angle of `(other,
+    /// self)`; the caller owns the precondition that `(other, self)` is not the
+    /// origin).
+    fn atan2_down(self, other: Self) -> Self;
+    /// An upper bound on the exact `atan2(self, other)`.
+    fn atan2_up(self, other: Self) -> Self;
+
+    /// The largest backend float not exceeding the mathematical π: the lower
+    /// endpoint of the format's enclosure of π.
+    ///
+    /// This duplicates [`RoundTrig::pi_down`] by workspace decision record
+    /// 0007's accepted trade, so a backend implementing only inverse trig owes
+    /// no dependence on [`RoundTrig`].
+    fn pi_down() -> Self;
+    /// The smallest backend float not below the mathematical π: the upper
+    /// endpoint of the format's enclosure of π.
+    fn pi_up() -> Self;
+}
+
+/// Outward-directed inverse hyperbolic functions, layered above [`RoundFloat`].
+///
+/// The family is `asinh`, `acosh`, `atanh`, reduction-free and constant-free.
+/// It is a trait separate from [`RoundInverseTrig`] and [`RoundExpBases`]
+/// because a backend lands the families on independent schedules (musl itself
+/// treats the arc hyperbolics differently from the inverse trig set: they sit
+/// among the named exceptions to its accuracy goal). See workspace decision
+/// record 0007.
+///
+/// # The contract each method must honor, and the caller-owned domains
+///
+/// For a finite `self`, [`asinh_down`](RoundInverseHyperbolic::asinh_down)
+/// returns a float less than or equal to the exact real `asinh(self)` and
+/// [`asinh_up`](RoundInverseHyperbolic::asinh_up) one greater than or equal to
+/// it; likewise for `acosh` and `atanh`. `asinh` is defined on the whole line,
+/// `acosh` on `[1, +inf)`, `atanh` on the open `(-1, 1)`. An out-of-domain
+/// argument is the caller's to guard: the f64 fixture passes `libm`'s sentinel
+/// through (`acosh` below 1, `atanh` at or outside `±1`), and the interval layer
+/// owns the domain restriction and the unbounded results at the `atanh`
+/// endpoints. Soundness is the obligation; tightness is a backend quality.
+pub trait RoundInverseHyperbolic: RoundFloat {
+    /// A lower bound on the exact `asinh(self)`.
+    fn asinh_down(self) -> Self;
+    /// An upper bound on the exact `asinh(self)`.
+    fn asinh_up(self) -> Self;
+    /// A lower bound on the exact `acosh(self)` (requires `self >= 1`).
+    fn acosh_down(self) -> Self;
+    /// An upper bound on the exact `acosh(self)` (requires `self >= 1`).
+    fn acosh_up(self) -> Self;
+    /// A lower bound on the exact `atanh(self)` (requires `self` in `(-1, 1)`).
+    fn atanh_down(self) -> Self;
+    /// An upper bound on the exact `atanh(self)` (requires `self` in `(-1, 1)`).
+    fn atanh_up(self) -> Self;
+}
+
+/// Outward-directed base-2 and base-10 exponential and logarithm functions,
+/// layered above [`RoundFloat`].
+///
+/// The family is `exp2`, `exp10`, `log2`, `log10`, independent of both the
+/// natural `exp`/`ln` of [`RoundTranscendental`] and the other round-two
+/// families, and constant-free. See workspace decision record 0007.
+///
+/// # The contract each method must honor, and the caller-owned domains
+///
+/// For a finite `self`, [`exp2_down`](RoundExpBases::exp2_down) returns a float
+/// less than or equal to the exact real `2^self` and
+/// [`exp2_up`](RoundExpBases::exp2_up) one greater than or equal to it; likewise
+/// for `exp10` (`10^self`). `log2` and `log10` are defined on `(0, +inf)`; a
+/// non-positive argument is the caller's to guard, and the f64 fixture passes
+/// `libm`'s sentinel through (NaN for a negative argument, negative infinity at
+/// zero), exactly as `ln` does. Soundness is the obligation; tightness is a
+/// backend quality.
+pub trait RoundExpBases: RoundFloat {
+    /// A lower bound on the exact `2^self`.
+    fn exp2_down(self) -> Self;
+    /// An upper bound on the exact `2^self`.
+    fn exp2_up(self) -> Self;
+    /// A lower bound on the exact `10^self`.
+    fn exp10_down(self) -> Self;
+    /// An upper bound on the exact `10^self`.
+    fn exp10_up(self) -> Self;
+    /// A lower bound on the exact `log2(self)` (requires `self > 0`).
+    fn log2_down(self) -> Self;
+    /// An upper bound on the exact `log2(self)` (requires `self > 0`).
+    fn log2_up(self) -> Self;
+    /// A lower bound on the exact `log10(self)` (requires `self > 0`).
+    fn log10_down(self) -> Self;
+    /// An upper bound on the exact `log10(self)` (requires `self > 0`).
+    fn log10_up(self) -> Self;
+}
+
+/// Correctly rounded vector reductions, layered above [`RoundFloat`], and the
+/// family's first tightness-mandatory trait.
+///
+/// The four reductions of IEEE 1788-2015 (clause 12.2.12) act on vectors of
+/// numbers rather than intervals, so they support the verified linear algebra
+/// the interval layer is built for. [`sum`](RoundReduction::sum_to_nearest) adds
+/// a vector, [`sum_abs`](RoundReduction::sum_abs_to_nearest) adds the absolute
+/// values, [`sum_square`](RoundReduction::sum_square_to_nearest) adds the squares
+/// (the standard's `sumSquare`), and [`dot`](RoundReduction::dot_to_nearest) adds
+/// the elementwise products of two equal-length vectors. Each reduction is
+/// offered in the four IEEE rounding directions with the same no-enum style the
+/// directed arithmetic uses, the direction fixed at the call site: `_down`
+/// toward minus infinity, `_up` toward plus infinity, `_to_nearest` to the
+/// nearest float with ties to even, and `_to_zero` toward zero.
+///
+/// # Correct rounding is the contract, not an upgrade
+///
+/// Every other trait in this crate takes soundness as the obligation and
+/// tightness as a quality a backend may add. This trait inverts that posture:
+/// the result MUST be the exact mathematical value of the reduction, rounded
+/// ONCE in the named direction. A reduction whose `_to_nearest` is not the
+/// correctly rounded exact value is not a loose version of the operation; it is
+/// a different operation. **A backend that cannot deliver correct rounding must
+/// therefore not implement this trait.** The `f64` fixture does not: a directed
+/// naive loop bounds a sum soundly, but no cheap loop yields the correctly
+/// rounded nearest of the exact sum, and a trait instance honoring three
+/// directions faithfully and one vacuously would be exactly the sound-but-vacuous
+/// default the family rejects. Capability honesty outranks coverage here. See
+/// workspace decision record 0008.
+///
+/// # Special values
+///
+/// The reductions take the extended-real exact-sum semantics the conformance
+/// corpus pins. Any NaN input gives NaN. For `sum` and `dot`, infinities of both
+/// signs among the (extended-real) terms give NaN, and infinities of a single
+/// sign give that infinity; a `dot` pairing a zero with an infinity gives NaN
+/// (the indeterminate `0 * inf`). For `sum_abs` and `sum_square`, whose terms are
+/// never negative, any infinity gives positive infinity and only NaN poisons the
+/// result. A finite product that would overflow `f64` is still a finite real and
+/// is accumulated exactly, never treated as an infinity.
+///
+/// # The empty vector and the sign of an exact zero
+///
+/// The empty vector's value is the operation's identity, zero. The sign of that
+/// zero, and of any exact-zero result reached by cancellation, follows the IEEE
+/// directed-rounding convention: `_down` (toward minus infinity) yields `-0`, and
+/// `_up`, `_to_nearest`, and `_to_zero` yield `+0`. The precise clause text for
+/// the empty-reduction sign is a paywalled corner the corpus does not exercise;
+/// this convention is pinned to the reference implementation's MPFR-backed
+/// behavior and recorded as an unverified corner in workspace decision record
+/// 0008. A nonzero result that underflows to zero keeps the sign of its exact
+/// value, as IEEE rounding requires.
+pub trait RoundReduction: RoundFloat {
+    /// The exact sum of `values`, rounded toward minus infinity.
+    fn sum_down(values: &[Self]) -> Self;
+    /// The exact sum of `values`, rounded toward plus infinity.
+    fn sum_up(values: &[Self]) -> Self;
+    /// The exact sum of `values`, rounded to nearest (ties to even).
+    fn sum_to_nearest(values: &[Self]) -> Self;
+    /// The exact sum of `values`, rounded toward zero.
+    fn sum_to_zero(values: &[Self]) -> Self;
+
+    /// The exact sum of the absolute values of `values`, rounded toward minus
+    /// infinity.
+    fn sum_abs_down(values: &[Self]) -> Self;
+    /// The exact sum of the absolute values of `values`, rounded toward plus
+    /// infinity.
+    fn sum_abs_up(values: &[Self]) -> Self;
+    /// The exact sum of the absolute values of `values`, rounded to nearest
+    /// (ties to even).
+    fn sum_abs_to_nearest(values: &[Self]) -> Self;
+    /// The exact sum of the absolute values of `values`, rounded toward zero.
+    fn sum_abs_to_zero(values: &[Self]) -> Self;
+
+    /// The exact sum of the squares of `values`, rounded toward minus infinity.
+    fn sum_square_down(values: &[Self]) -> Self;
+    /// The exact sum of the squares of `values`, rounded toward plus infinity.
+    fn sum_square_up(values: &[Self]) -> Self;
+    /// The exact sum of the squares of `values`, rounded to nearest (ties to
+    /// even).
+    fn sum_square_to_nearest(values: &[Self]) -> Self;
+    /// The exact sum of the squares of `values`, rounded toward zero.
+    fn sum_square_to_zero(values: &[Self]) -> Self;
+
+    /// The exact dot product of `a` and `b`, rounded toward minus infinity. The
+    /// caller owns the precondition that the slices have equal length; an
+    /// implementation asserts it.
+    fn dot_down(a: &[Self], b: &[Self]) -> Self;
+    /// The exact dot product of `a` and `b`, rounded toward plus infinity. Equal
+    /// lengths, a caller-owned precondition, asserted.
+    fn dot_up(a: &[Self], b: &[Self]) -> Self;
+    /// The exact dot product of `a` and `b`, rounded to nearest (ties to even).
+    /// Equal lengths, a caller-owned precondition, asserted.
+    fn dot_to_nearest(a: &[Self], b: &[Self]) -> Self;
+    /// The exact dot product of `a` and `b`, rounded toward zero. Equal lengths,
+    /// a caller-owned precondition, asserted.
+    fn dot_to_zero(a: &[Self], b: &[Self]) -> Self;
 }
