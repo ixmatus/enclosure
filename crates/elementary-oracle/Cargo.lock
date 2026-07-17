@@ -16,6 +16,7 @@ version = "0.0.0"
 dependencies = [
  "affine-arith",
  "interval-1788",
+ "pfloat",
  "pfloat-libm",
  "round-float",
 ]
