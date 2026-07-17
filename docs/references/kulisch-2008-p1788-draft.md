@@ -16,6 +16,7 @@ rot-risk: died-once
 provenance-class: primary
 consumers:
   - crates/interval-1788/docs/decisions/0005-v1-road-full-conformance.md (the complete-arithmetic lineage behind the reduction requirement)
+  - docs/decisions/0008-reduction-operations-kulisch-accumulator.md (the lineage behind the accumulator choice)
 verification:
   - none (historical document)
 sha256:

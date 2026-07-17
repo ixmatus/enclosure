@@ -15,6 +15,7 @@ rot-risk: academic-personal
 provenance-class: secondary
 consumers:
   - crates/round-float/docs/decisions/0002-tight-f64-backend.md (TwoSum and TwoProduct as the error-free transforms behind the directed adjust)
+  - docs/decisions/0008-reduction-operations-kulisch-accumulator.md (the deferred distillation alternative)
 verification:
   - none yet (the tight backend's property and oracle lanes will exercise the derived algorithms)
 sha256: none

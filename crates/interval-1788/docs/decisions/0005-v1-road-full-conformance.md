@@ -98,12 +98,13 @@ literature and the uncertainty is named (see Consequences).
    variant: the corpus's cancellation vector (`dot` of `{2^52+1, 2^104}`
    with `{2^52-1, -1}` demanding exactly `-1`) is answerable only by exact
    accumulation with one final rounding, so the exact-accumulation design
-   problem is real and priced in. Two design questions remain for the
-   implementation slice: the full rounding-mode list (the corpus tests only
-   `_nearest`; the clause text governs) and the operation's home, since
-   reductions act on point-number vectors, not intervals (a round-float
-   vector extension that this crate re-exports is the natural shape; decide
-   in that slice's ADR).
+   problem is real and priced in. The remaining design questions resolved
+   in workspace ADR-0008: the surface is per-mode over four modes
+   (downward, upward, to nearest, toward zero, pinned to the reference
+   implementation's declarations), the home is a tightness-mandatory
+   `RoundReduction` trait in round-float that this crate re-exports, and
+   the `TightF64` implementation is an integer Kulisch accumulator (exact
+   by construction, one rounding at extraction).
 8. **Text I/O.** `nums_to_interval`, `text_to_interval` (bare and decorated,
    including the uncertain form and hex literals the constructor vectors
    exercise), and `interval_to_text`; plus the exact text representation
