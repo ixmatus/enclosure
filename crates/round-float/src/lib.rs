@@ -150,6 +150,30 @@ pub trait RoundFloat: Copy + PartialOrd {
     }
 }
 
+/// The format's largest finite value, layered above [`RoundFloat`] as an exact
+/// associated constant.
+///
+/// A backend implements this to unlock the interval layer's `mid`, `rad`, and
+/// `mid_rad` on half-unbounded inputs. IEEE 1788's Level 2 `mid` of an interval
+/// unbounded on one side is the format's largest finite value
+/// (`mid([a, +inf]) = +realmax`, `mid([-inf, b]) = -realmax`), so a backend that
+/// cannot name that value cannot supply the standard's `mid` there. The datum is
+/// exact format metadata, like [`ZERO`](RoundFloat::ZERO),
+/// [`ONE`](RoundFloat::ONE), and [`INFINITY`](RoundFloat::INFINITY) on the core:
+/// naming the largest finite value involves no rounding direction and no
+/// approximation, so it is a constant, not a directed method pair.
+///
+/// It rides a separate extension trait rather than the core because the core is
+/// frozen. A required constant on [`RoundFloat`] would break every out-of-tree
+/// backend the moment it landed, the same argument that keeps the transcendental
+/// and integer-rounding families off the core. A backend opts in by supplying the
+/// one constant, exactly as it opts into [`RoundTranscendental`] or
+/// [`RoundInteger`]. See workspace decision record 0009.
+pub trait RoundLargestFinite: RoundFloat {
+    /// The format's largest finite value, exactly.
+    const LARGEST_FINITE: Self;
+}
+
 /// Outward-directed transcendental functions, layered above [`RoundFloat`].
 ///
 /// `exp` and `ln` are not part of the common core [`RoundFloat`] models. The

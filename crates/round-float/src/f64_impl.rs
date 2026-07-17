@@ -26,7 +26,10 @@
 //! uses `libm::sqrt`, which is correctly rounded, then steps outward the same
 //! way.
 
-use crate::{RoundFloat, RoundHyperbolic, RoundInteger, RoundPow, RoundTranscendental, RoundTrig};
+use crate::{
+    RoundFloat, RoundHyperbolic, RoundInteger, RoundLargestFinite, RoundPow, RoundTranscendental,
+    RoundTrig,
+};
 
 impl RoundFloat for f64 {
     const INFINITY: Self = f64::INFINITY;
@@ -99,6 +102,10 @@ impl RoundFloat for f64 {
     fn is_zero(self) -> bool {
         self == 0.0
     }
+}
+
+impl RoundLargestFinite for f64 {
+    const LARGEST_FINITE: Self = f64::MAX;
 }
 
 /// Relative margin that turns `libm`'s faithfully-rounded `exp`/`log` into a
