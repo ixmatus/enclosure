@@ -29,6 +29,10 @@ consumers:
     decorated, from libieeep1788_elem.itl)
   - crates/interval-1788/tests/cancel_fixture.rs (cancelMinus and cancelPlus
     vectors, bare and decorated, from libieeep1788_cancel.itl)
+  - crates/interval-1788/tests/numeric_boolean_fixture.rs (mid, rad, midRad from
+    libieeep1788_num.itl; equal, less, strictLess, precedes, strictPrecedes and
+    the decorated NaI rule from libieeep1788_bool.itl; the sixteen overlap states,
+    bare and decorated, from libieeep1788_overlap.itl)
 verification:
   - none yet (the conformance lane that will consume these vectors is roadmap work)
 sha256:

@@ -46,6 +46,7 @@
 use core::ops::{Add, Div, Mul, Neg, Sub};
 
 use crate::decoration::Decoration;
+use crate::functions::Overlap;
 use crate::interval::Interval;
 use round_float::{RoundFloat, RoundInteger};
 
@@ -374,6 +375,81 @@ impl<F: RoundFloat> DecoratedInterval<F> {
             return Self::nai();
         }
         Self::pack(self.x.cancel_plus(rhs.x), Decoration::Trv)
+    }
+
+    // --- Boolean relations on the interval part -----------------------------
+    //
+    // The set-based flavor's comparison relations read the interval part and
+    // ignore the decoration, with one rule the vectors pin: a `NaI` operand makes
+    // every relation false. So each method returns `false` when either operand is
+    // `NaI` and otherwise delegates to the bare relation on the interval parts.
+
+    /// Set equality on the interval parts (the standard's decorated `equal`).
+    /// False if either operand is `NaI` (a `NaI` equals nothing, not even itself).
+    #[must_use]
+    pub fn equal(self, other: Self) -> bool {
+        !self.is_nai() && !other.is_nai() && self.x.equal(other.x)
+    }
+
+    /// The weak ordering [`less`](Interval::less) on the interval parts. False if
+    /// either operand is `NaI`.
+    #[must_use]
+    pub fn less(self, other: Self) -> bool {
+        !self.is_nai() && !other.is_nai() && self.x.less(other.x)
+    }
+
+    /// The strict ordering [`strict_less`](Interval::strict_less) on the interval
+    /// parts. False if either operand is `NaI`.
+    #[must_use]
+    pub fn strict_less(self, other: Self) -> bool {
+        !self.is_nai() && !other.is_nai() && self.x.strict_less(other.x)
+    }
+
+    /// The weak ordering [`precedes`](Interval::precedes) on the interval parts.
+    /// False if either operand is `NaI`.
+    #[must_use]
+    pub fn precedes(self, other: Self) -> bool {
+        !self.is_nai() && !other.is_nai() && self.x.precedes(other.x)
+    }
+
+    /// The strict ordering [`strict_precedes`](Interval::strict_precedes) on the
+    /// interval parts. False if either operand is `NaI`.
+    #[must_use]
+    pub fn strict_precedes(self, other: Self) -> bool {
+        !self.is_nai() && !other.is_nai() && self.x.strict_precedes(other.x)
+    }
+
+    /// The subset relation [`subset`](Interval::subset) on the interval parts.
+    /// False if either operand is `NaI`.
+    #[must_use]
+    pub fn subset(self, other: Self) -> bool {
+        !self.is_nai() && !other.is_nai() && self.x.subset(other.x)
+    }
+
+    /// The interior relation [`interior`](Interval::interior) on the interval
+    /// parts. False if either operand is `NaI`.
+    #[must_use]
+    pub fn interior(self, other: Self) -> bool {
+        !self.is_nai() && !other.is_nai() && self.x.interior(other.x)
+    }
+
+    /// The disjointness relation [`disjoint`](Interval::disjoint) on the interval
+    /// parts. False if either operand is `NaI`.
+    #[must_use]
+    pub fn disjoint(self, other: Self) -> bool {
+        !self.is_nai() && !other.is_nai() && self.x.disjoint(other.x)
+    }
+
+    /// The [`overlap`](Interval::overlap) relation on the interval parts.
+    ///
+    /// Unlike the boolean relations, `overlap` returns an [`Overlap`] state rather
+    /// than a truth value, so there is no "false" for a `NaI` operand and the
+    /// vectors pin no `NaI` case. A `NaI`'s interval part is the empty set, so a
+    /// `NaI` operand reads through as empty, yielding one of the three empty
+    /// states.
+    #[must_use]
+    pub fn overlap(self, other: Self) -> Overlap {
+        self.x.overlap(other.x)
     }
 }
 

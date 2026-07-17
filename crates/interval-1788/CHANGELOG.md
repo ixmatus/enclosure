@@ -8,6 +8,40 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Added
 
+- The numeric and boolean function completion (the Phase C deferrals).
+  - Numeric `mid`, `rad`, and `mid_rad` on `Interval<F>`, each `Option` (`None`
+    for the empty interval). `mid_rad` is the core; `mid` and `rad` project it, so
+    the radius always matches the emitted midpoint. The defining property
+    `[mid - rad, mid + rad]` encloses the interval holds structurally: the radius
+    is the larger one-sided distance to the actual midpoint, rounded up. The
+    midpoint is overflow-safe (the halved form `inf/2 + sup/2`, never `(inf + sup)
+    / 2`). `Entire` centers at zero, a singleton at its point, a
+    symmetric-about-zero interval at zero, each exactly. A directed-rounding
+    surface cannot reproduce the Level 2 nearest-float datum in general, nor reach
+    the `realmax` a half-unbounded interval pins (no largest-finite constant on
+    `RoundFloat`); those return the finite endpoint with an infinite radius (sound,
+    documented at `mid_rad`), and the tightest midpoint is deferred to the
+    conformance lane over a correctly-rounded backend.
+  - The boolean orderings `equal`, `less`, `strict_less`, `precedes`, and
+    `strict_precedes` on `Interval<F>`, exact endpoint comparisons with the empty
+    conventions the vectors pin (`less` and `strict_less`: both empty true, one
+    empty false; `precedes` and `strict_precedes`: any empty true; `equal`
+    coincides with `PartialEq`). The two strict forms treat matching infinite
+    endpoints as satisfying the strict clause.
+  - The sixteen-state `overlap` relation: a new public `enum Overlap` and
+    `Interval::overlap`, the standard's mutually exclusive Allen-algebra states by
+    pure endpoint case analysis. Exhaustiveness is guaranteed by a total match over
+    the two gap tests plus the nine three-way endpoint-comparison combinations.
+  - Decorated forms of all eight orderings and `overlap` on `DecoratedInterval<F>`,
+    reading the interval part; the boolean relations return false when either
+    operand is `NaI`, per the vectors.
+  - Test lane `tests/numeric_boolean_fixture.rs` transcribes the ITF1788
+    `libieeep1788_num.itl`, `libieeep1788_bool.itl`, and
+    `libieeep1788_overlap.itl` vectors (numeric functions pinned exactly where the
+    derivation guarantees it, the enclosure property asserted otherwise; the
+    orderings and overlap pinned exactly, empty tables included) and adds the
+    enclosure-property, midpoint-membership, ordering-coherence, and
+    overlap-consistency property lanes.
 - The cancellative operations `cancel_minus` and `cancel_plus` on `Interval<F>`
   and `DecoratedInterval<F>` (bare `F: RoundFloat`). `cancel_minus(x, y)` recovers
   the tightest `z` with `y + z` enclosing `x`; `cancel_plus(x, y)` is
@@ -93,8 +127,9 @@ v1.0; before then the API may break between 0.x releases.
   - Property tests including inclusion isotonicity for `+`, `-`, `*` (the
     monotonicity half of the fundamental theorem), intersection contained in both
     operands, convex hull containing both, and `disjoint` iff empty intersection.
-  - Deferred: `mid` and `rad`, and the ordering relations (`less`, `precedes` and
-    their strict forms), pending the Level 2 conventions for their empty and
+  - Then deferred, now completed above (see the Unreleased entry): `mid` and
+    `rad`, and the ordering relations (`equal`, `less`, `precedes` and their
+    strict forms), which needed the Level 2 conventions for their empty and
     unbounded cases.
 
 - Phase D, decorations.
