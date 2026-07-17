@@ -8,6 +8,17 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Added
 
+- The point-function battery: `abs`, `min`, `max`, and `sign` on `Interval<F>`
+  and `DecoratedInterval<F>` (bare `F: RoundFloat`), and `ceil`, `floor`,
+  `trunc`, `round_ties_to_even`, and `round_ties_to_away` behind
+  `F: RoundFloat + RoundInteger` (the new exact extension trait, re-exported
+  beside `RoundFloat`). Each is a monotone step or lattice function, so the
+  image is an exact endpoint computation with no outward widening. These are the
+  first operations to earn the `def` decoration from the operation itself: the
+  six discontinuous ones grade `def` when the box spans a jump, `com`/`dac`
+  otherwise, following the ITF1788 `libieeep1788_elem.itl` vectors. Test lane
+  `tests/point_functions_fixture.rs` transcribes the conformance vectors and adds
+  pointwise-enclosure, exactness, and decoration property tests.
 - Phase E opener, the first elementary functions.
   - `exp` and `ln` on `Interval<F>` and `DecoratedInterval<F>`, behind
     `F: RoundFloat + RoundTranscendental` (the extension trait, re-exported

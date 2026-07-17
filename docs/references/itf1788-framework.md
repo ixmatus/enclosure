@@ -24,6 +24,9 @@ consumers:
   - crates/interval-1788/src/lib.rs (roadmap conformance lane)
   - crates/interval-1788/docs/decisions/0003-kani-over-f64-fixture.md
   - crates/interval-1788/README.md (verification disclosure)
+  - crates/interval-1788/tests/point_functions_fixture.rs (abs, min, max, sign,
+    ceil, floor, trunc, roundTiesToEven, roundTiesToAway vectors, bare and
+    decorated, from libieeep1788_elem.itl)
 verification:
   - none yet (the conformance lane that will consume these vectors is roadmap work)
 sha256:

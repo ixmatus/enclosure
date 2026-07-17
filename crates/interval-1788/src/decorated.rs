@@ -7,11 +7,11 @@
 //! and decorates the result with the meet of that local decoration and the
 //! decorations the inputs carried. A `NaI` input poisons the result.
 //!
-//! For the operations here (`+`, `-`, `*`, `/`, `neg`, `recip`, `sqr`, `sqrt`,
-//! `mul_add`) the local decoration is one of `com`, `dac`, or `trv`. These
-//! functions are continuous wherever they are defined, so `def` (defined but
-//! discontinuous) never arises from them; it is reachable only through
-//! [`set_dec`](DecoratedInterval::set_dec). The local decoration is:
+//! For the arithmetic and elementary operations here (`+`, `-`, `*`, `/`, `neg`,
+//! `recip`, `sqr`, `sqrt`, `mul_add`, `exp`, `ln`) the local decoration is one of
+//! `com`, `dac`, or `trv`. These functions are continuous wherever they are
+//! defined, so `def` (defined but discontinuous) does not arise from them. The
+//! local decoration is:
 //!
 //! - `trv` when the operation is undefined somewhere on the input box (division
 //!   by an interval containing zero, square root of an interval reaching below
@@ -27,12 +27,27 @@
 //! bounded result. The `pack` seam every operation funnels through demotes
 //! `com` to `dac` whenever the assembled interval is unbounded, so no result
 //! escapes decorated `com` while unbounded.
+//!
+//! # The point functions do earn `def`
+//!
+//! The [point functions](crate::point) `sign`, `ceil`, `floor`, `trunc`,
+//! `round_ties_to_even`, and `round_ties_to_away` are defined everywhere but
+//! discontinuous at their jump points, so they are the first operations in the
+//! crate that produce the `def` decoration from an operation rather than only
+//! through [`set_dec`](DecoratedInterval::set_dec). A step function restricted to
+//! a connected box is continuous exactly when it is constant there, so the local
+//! decoration reads off the image: `def` when the image spans more than one
+//! value (the restriction is discontinuous), otherwise `com` (or `dac` when a
+//! jump point sits at an endpoint, or the input is unbounded). `abs`, `min`, and
+//! `max` are continuous everywhere and behave like the arithmetic operations
+//! above. The [`step_local`] helper computes this, and the point functions
+//! themselves live in this module beside the operations they decorate.
 
 use core::ops::{Add, Div, Mul, Neg, Sub};
 
 use crate::decoration::Decoration;
 use crate::interval::Interval;
-use round_float::RoundFloat;
+use round_float::{RoundFloat, RoundInteger};
 
 /// Whether an interval is bounded and nonempty (so a continuous operation on it
 /// yields a bounded nonempty result, the precondition for `com`).
@@ -52,6 +67,82 @@ fn local(defined_continuous: bool, all_bounded_nonempty: bool) -> Decoration {
     } else {
         Decoration::Dac
     }
+}
+
+/// The local decoration of a point function that is defined on the whole real
+/// line but has jump discontinuities (`sign`, `ceil`, `floor`, `trunc`, and the
+/// two roundings), given the input box and the function's image over it, and
+/// whether either input endpoint is a jump point of the function.
+///
+/// A step function restricted to a connected box takes only integer-spaced
+/// values, so it is continuous there exactly when it is constant, that is, when
+/// the image is a single value. Reading continuity off the image this way handles
+/// the one-sided endpoint cases uniformly: an endpoint that sits at a jump on the
+/// side the box extends into already makes the image span two values, so it lands
+/// in the `def` branch without a per-function limit analysis. When the image is a
+/// single value the restriction is continuous, and the grade is `com` unless a
+/// jump point coincides with an endpoint (so the closed box still contains a
+/// discontinuity, forbidding `com`) or the input is unbounded (`com` promises a
+/// bounded input): either demotes to `dac`.
+#[inline]
+fn step_local<F: RoundFloat>(
+    input: Interval<F>,
+    image: Interval<F>,
+    jump_at_endpoint: bool,
+) -> Decoration {
+    match image.bounds() {
+        // The image of the empty set is empty: nothing is guaranteed.
+        None => Decoration::Trv,
+        Some((lo, hi)) => {
+            if lo != hi {
+                // The image spans more than one value, so the step function is
+                // not constant, hence discontinuous, on the box.
+                Decoration::Def
+            } else if jump_at_endpoint || !input.is_bounded() {
+                Decoration::Dac
+            } else {
+                Decoration::Com
+            }
+        }
+    }
+}
+
+/// Whether `x` is a half-integer (`n + 0.5` for an integer `n`), the jump lattice
+/// of the round-to-nearest point functions.
+///
+/// `x` is a half-integer exactly when `2x` is an integer and `x` is not.
+/// Doubling is exact on a correctly-rounded backend, so `add_down` and `add_up`
+/// both collapse to the exact `2x` and the integer test (`ceil <= floor` on the
+/// doubled bracket) is exact. On the deliberately sound-not-tight `f64` fixture
+/// the doubled bracket is one ulp wide, so a value within one ulp of a
+/// half-integer can be misgraded; the window is unreachable by the conformance
+/// vectors, and only the `com`-versus-`dac` grade is ever affected, never the
+/// enclosure, which the exact bare image already fixes.
+#[inline]
+fn is_half_integer<F: RoundFloat + RoundInteger>(x: F) -> bool {
+    if x.floor() == x {
+        // An integer is not a half-integer.
+        return false;
+    }
+    let lo = x.add_down(x);
+    let hi = x.add_up(x);
+    // `2x` lies in `[lo, hi]`; it is an integer iff the bracket admits one.
+    lo.ceil() <= hi.floor()
+}
+
+/// Whether `x` is an integer, the jump lattice of `floor` and `ceil`. Exact:
+/// `floor` fixes `x` iff `x` is already integral.
+#[inline]
+fn is_integer<F: RoundFloat + RoundInteger>(x: F) -> bool {
+    x.floor() == x
+}
+
+/// Whether `x` is a nonzero integer, the jump lattice of `trunc`: `trunc` is
+/// continuous at zero (`trunc(x) = 0` across a neighborhood of it) and jumps only
+/// at the nonzero integers.
+#[inline]
+fn is_nonzero_integer<F: RoundFloat + RoundInteger>(x: F) -> bool {
+    is_integer(x) && !x.is_zero()
 }
 
 /// Whether the decoration is consistent with the interval. `com` needs a bounded
@@ -206,6 +297,59 @@ impl<F: RoundFloat> DecoratedInterval<F> {
             self.d.meet(factor.d).meet(addend.d).meet(dloc),
         )
     }
+
+    /// Absolute value, decorated. Defined and continuous everywhere, so the
+    /// local decoration is `com` on a bounded nonempty input and `dac` on an
+    /// unbounded one; `def` never arises.
+    #[must_use]
+    pub fn abs(self) -> Self {
+        if self.is_nai() {
+            return Self::nai();
+        }
+        let dloc = local(!self.x.is_empty(), bounded_nonempty(self.x));
+        Self::pack(self.x.abs(), self.d.meet(dloc))
+    }
+
+    /// Pointwise minimum, decorated. Defined and continuous everywhere, so the
+    /// local decoration is `com` on bounded nonempty inputs, `dac` when an input
+    /// is unbounded, and `trv` when an input is empty.
+    #[must_use]
+    pub fn min(self, rhs: Self) -> Self {
+        if self.is_nai() || rhs.is_nai() {
+            return Self::nai();
+        }
+        let dom = !self.x.is_empty() && !rhs.x.is_empty();
+        let dloc = local(dom, bounded_nonempty(self.x) && bounded_nonempty(rhs.x));
+        Self::pack(self.x.min(rhs.x), self.d.meet(rhs.d).meet(dloc))
+    }
+
+    /// Pointwise maximum, decorated. The companion of [`min`](DecoratedInterval::min),
+    /// with the same continuous-everywhere decoration.
+    #[must_use]
+    pub fn max(self, rhs: Self) -> Self {
+        if self.is_nai() || rhs.is_nai() {
+            return Self::nai();
+        }
+        let dom = !self.x.is_empty() && !rhs.x.is_empty();
+        let dloc = local(dom, bounded_nonempty(self.x) && bounded_nonempty(rhs.x));
+        Self::pack(self.x.max(rhs.x), self.d.meet(rhs.d).meet(dloc))
+    }
+
+    /// Sign, decorated. Defined everywhere but discontinuous at zero, so it earns
+    /// `def` whenever the restriction to the box is discontinuous, that is,
+    /// whenever the box contains points of more than one sign (its image spans
+    /// more than one of `-1`, `0`, `1`). The lone jump point is zero, so `com`
+    /// demotes to `dac` on the singleton `{0}` (the closed box still meets the
+    /// discontinuity) and on an unbounded sign-constant box.
+    #[must_use]
+    pub fn sign(self) -> Self {
+        if self.is_nai() {
+            return Self::nai();
+        }
+        let jump_at_endpoint = self.x.inf().is_zero() || self.x.sup().is_zero();
+        let dloc = step_local(self.x, self.x.sign(), jump_at_endpoint);
+        Self::pack(self.x.sign(), self.d.meet(dloc))
+    }
 }
 
 impl<F: RoundFloat + round_float::RoundTranscendental> DecoratedInterval<F> {
@@ -239,6 +383,71 @@ impl<F: RoundFloat + round_float::RoundTranscendental> DecoratedInterval<F> {
         let dom = !self.x.is_empty() && self.x.inf() > F::ZERO;
         let dloc = local(dom, bounded_nonempty(self.x) && result.is_bounded());
         Self::pack(result, self.d.meet(dloc))
+    }
+}
+
+impl<F: RoundFloat + RoundInteger> DecoratedInterval<F> {
+    /// Ceiling, decorated. Defined everywhere, discontinuous at every integer, so
+    /// it earns `def` when the box spans an integer jump (its image is not a
+    /// single integer); `com` demotes to `dac` when an integer sits at an
+    /// endpoint of a continuous box.
+    #[must_use]
+    pub fn ceil(self) -> Self {
+        if self.is_nai() {
+            return Self::nai();
+        }
+        let image = self.x.ceil();
+        let jump = is_integer(self.x.inf()) || is_integer(self.x.sup());
+        Self::pack(image, self.d.meet(step_local(self.x, image, jump)))
+    }
+
+    /// Floor, decorated. The companion of [`ceil`](DecoratedInterval::ceil), also
+    /// jumping at every integer.
+    #[must_use]
+    pub fn floor(self) -> Self {
+        if self.is_nai() {
+            return Self::nai();
+        }
+        let image = self.x.floor();
+        let jump = is_integer(self.x.inf()) || is_integer(self.x.sup());
+        Self::pack(image, self.d.meet(step_local(self.x, image, jump)))
+    }
+
+    /// Truncation, decorated. Continuous at zero and discontinuous at every
+    /// nonzero integer, so the endpoint demotion tests for a nonzero integer.
+    #[must_use]
+    pub fn trunc(self) -> Self {
+        if self.is_nai() {
+            return Self::nai();
+        }
+        let image = self.x.trunc();
+        let jump = is_nonzero_integer(self.x.inf()) || is_nonzero_integer(self.x.sup());
+        Self::pack(image, self.d.meet(step_local(self.x, image, jump)))
+    }
+
+    /// Round to nearest, ties to even, decorated. Discontinuous at every
+    /// half-integer, so the endpoint demotion tests for a half-integer.
+    #[must_use]
+    pub fn round_ties_to_even(self) -> Self {
+        if self.is_nai() {
+            return Self::nai();
+        }
+        let image = self.x.round_ties_to_even();
+        let jump = is_half_integer(self.x.inf()) || is_half_integer(self.x.sup());
+        Self::pack(image, self.d.meet(step_local(self.x, image, jump)))
+    }
+
+    /// Round to nearest, ties away from zero, decorated. The companion of
+    /// [`round_ties_to_even`](DecoratedInterval::round_ties_to_even), also
+    /// jumping at every half-integer.
+    #[must_use]
+    pub fn round_ties_to_away(self) -> Self {
+        if self.is_nai() {
+            return Self::nai();
+        }
+        let image = self.x.round_ties_to_away();
+        let jump = is_half_integer(self.x.inf()) || is_half_integer(self.x.sup());
+        Self::pack(image, self.d.meet(step_local(self.x, image, jump)))
     }
 }
 

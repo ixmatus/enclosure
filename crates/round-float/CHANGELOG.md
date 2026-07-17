@@ -8,6 +8,12 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Added
 
+- `RoundInteger`, an exact extension trait (`: RoundFloat`) for the integer
+  rounding point functions `floor`, `ceil`, `trunc`, `round_ties_to_even`, and
+  `round_ties_to_away`. Every method is exact in any binary or decimal format, so
+  there is no `_down`/`_up` split, the same undirected shape as `negate`. The
+  `f64` fixture implements it behind the `f64` feature by delegating to `libm`
+  (`roundeven` and `round` for the two tie rules). Decision record 0003.
 - `RoundFloat`, the directed-rounding float contract, extracted from
   `interval-1788` into this foundation crate so the interval and
   affine-arithmetic crates can share one contract. Split-direction methods

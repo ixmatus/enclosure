@@ -26,7 +26,7 @@
 //! uses `libm::sqrt`, which is correctly rounded, then steps outward the same
 //! way.
 
-use crate::{RoundFloat, RoundTranscendental};
+use crate::{RoundFloat, RoundInteger, RoundTranscendental};
 
 impl RoundFloat for f64 {
     const INFINITY: Self = f64::INFINITY;
@@ -207,9 +207,42 @@ impl RoundTranscendental for f64 {
     }
 }
 
+/// The integer-rounding point functions. Each is exact, so it delegates to the
+/// matching `libm` routine and returns the result unwidened.
+///
+/// The delegation goes through `libm` rather than the `f64::floor`/`f64::ceil`
+/// inherent methods because this crate is `no_std`: those methods live in `std`
+/// (they lower to platform math intrinsics), while the `libm` port is a pure-Rust
+/// `no_std` implementation, the same reason [`RoundFloat::sqrt_down`] uses
+/// `libm::sqrt`. `libm::roundeven` is IEEE 754 `roundToIntegralTiesToEven`
+/// (matching `f64::round_ties_even`), and `libm::round` breaks ties away from
+/// zero (matching `f64::round`); neither reads a hardware rounding mode.
+impl RoundInteger for f64 {
+    #[inline]
+    fn floor(self) -> Self {
+        libm::floor(self)
+    }
+    #[inline]
+    fn ceil(self) -> Self {
+        libm::ceil(self)
+    }
+    #[inline]
+    fn trunc(self) -> Self {
+        libm::trunc(self)
+    }
+    #[inline]
+    fn round_ties_to_even(self) -> Self {
+        libm::roundeven(self)
+    }
+    #[inline]
+    fn round_ties_to_away(self) -> Self {
+        libm::round(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::RoundTranscendental;
+    use crate::{RoundInteger, RoundTranscendental};
     use core::f64::consts::{E, LN_2};
 
     /// The bracket straddles the central libm value (a necessary condition for
@@ -275,5 +308,43 @@ mod tests {
     fn ln_domain_edges_follow_libm() {
         assert!(0.0_f64.ln_up().is_infinite() && 0.0_f64.ln_up() < 0.0); // ln 0 = -inf
         assert!((-1.0_f64).ln_down().is_nan()); // ln of negative is undefined
+    }
+
+    // The integer-rounding results are exact integral values, so equality is the
+    // property under test; the float_cmp lint (aimed at comparing rounded
+    // approximations) does not apply.
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn floor_ceil_trunc_are_exact_directed_rounding() {
+        assert_eq!(RoundInteger::floor(1.9_f64), 1.0);
+        assert_eq!(RoundInteger::floor(-1.1_f64), -2.0);
+        assert_eq!(RoundInteger::ceil(1.1_f64), 2.0);
+        assert_eq!(RoundInteger::ceil(-1.9_f64), -1.0);
+        assert_eq!(RoundInteger::trunc(1.9_f64), 1.0);
+        assert_eq!(RoundInteger::trunc(-1.9_f64), -1.0); // toward zero, not -2
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn round_ties_split_even_from_away() {
+        // A half-integer is the tie the two rules resolve differently.
+        assert_eq!(RoundInteger::round_ties_to_even(2.5_f64), 2.0); // to even
+        assert_eq!(RoundInteger::round_ties_to_away(2.5_f64), 3.0); // away from zero
+        assert_eq!(RoundInteger::round_ties_to_even(3.5_f64), 4.0); // to even
+        assert_eq!(RoundInteger::round_ties_to_away(3.5_f64), 4.0); // away agrees here
+        assert_eq!(RoundInteger::round_ties_to_even(-2.5_f64), -2.0);
+        assert_eq!(RoundInteger::round_ties_to_away(-2.5_f64), -3.0);
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn integer_rounding_preserves_integers_and_infinities() {
+        // Above the contiguous-integer range every finite value is integral, and
+        // the operations are the identity there; infinities pass through.
+        assert_eq!(RoundInteger::floor(f64::MAX), f64::MAX);
+        assert_eq!(RoundInteger::ceil(f64::MAX), f64::MAX);
+        assert_eq!(RoundInteger::round_ties_to_even(f64::MAX), f64::MAX);
+        assert!(RoundInteger::floor(f64::INFINITY).is_infinite());
+        assert!(RoundInteger::ceil(f64::NEG_INFINITY).is_infinite());
     }
 }

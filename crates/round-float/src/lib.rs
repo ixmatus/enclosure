@@ -166,3 +166,58 @@ pub trait RoundTranscendental: RoundFloat {
     /// An upper bound on the exact `ln(self)` (requires `self > 0`).
     fn ln_up(self) -> Self;
 }
+
+/// Rounding of a float to an integral value, layered above [`RoundFloat`].
+///
+/// These are the point functions that map a float to a nearby integer: round
+/// toward minus infinity ([`floor`](RoundInteger::floor)), toward plus infinity
+/// ([`ceil`](RoundInteger::ceil)), toward zero ([`trunc`](RoundInteger::trunc)),
+/// and to the nearest integer with the two standard tie rules
+/// ([`round_ties_to_even`](RoundInteger::round_ties_to_even),
+/// [`round_ties_to_away`](RoundInteger::round_ties_to_away)). The interval crate
+/// needs them for the IEEE 1788 integer-rounding point functions; they are not
+/// part of the common core [`RoundFloat`], so a backend opts in by implementing
+/// this trait, exactly as it opts into [`RoundTranscendental`] (round-float
+/// decision record 0001, workspace decision record 0005 on per-family capability
+/// traits).
+///
+/// # Every method is exact, so there is no down/up split
+///
+/// Each result is an integral value that is representable in any binary or
+/// decimal floating-point format the backend might use: the integers within a
+/// format's contiguous-integer range are all representable, and above that range
+/// every finite value is already integral, so rounding to an integer returns it
+/// unchanged. The operation therefore never rounds, and there is no lower/upper
+/// bound to distinguish. This is the same reason [`negate`](RoundFloat::negate)
+/// is a single undirected method rather than a `negate_down`/`negate_up` pair: an
+/// exact operation carries no rounding direction. The interval layer relies on
+/// the exactness, taking the image of `[a, b]` under a monotone step function as
+/// `[op(a), op(b)]` with no outward widening.
+///
+/// # Accepted duplication with `RoundTrig`
+///
+/// Workspace decision record 0005 gives the trigonometric trait `RoundTrig` its
+/// own exact `floor` for argument reduction (extracting the multiple of pi). A
+/// backend that implements both `RoundInteger` and `RoundTrig` therefore supplies
+/// `floor` twice. The duplication is accepted, the same trade that record makes
+/// for the pi pair: keeping [`RoundFloat`] frozen and each capability trait
+/// self-contained is worth one repeated method. See round-float decision record
+/// 0003.
+pub trait RoundInteger: RoundFloat {
+    /// The largest integral value not greater than `self` (round toward minus
+    /// infinity). Exact.
+    fn floor(self) -> Self;
+    /// The smallest integral value not less than `self` (round toward plus
+    /// infinity). Exact.
+    fn ceil(self) -> Self;
+    /// The integral part of `self`, dropping the fraction (round toward zero).
+    /// Exact.
+    fn trunc(self) -> Self;
+    /// The nearest integral value, with a tie (a half-integer) resolved to the
+    /// even neighbor. This is IEEE 754 `roundToIntegralTiesToEven`. Exact.
+    fn round_ties_to_even(self) -> Self;
+    /// The nearest integral value, with a tie (a half-integer) resolved to the
+    /// neighbor of larger magnitude. This is IEEE 754
+    /// `roundToIntegralTiesToAway`. Exact.
+    fn round_ties_to_away(self) -> Self;
+}
