@@ -350,6 +350,31 @@ impl<F: RoundFloat> DecoratedInterval<F> {
         let dloc = step_local(self.x, self.x.sign(), jump_at_endpoint);
         Self::pack(self.x.sign(), self.d.meet(dloc))
     }
+
+    /// Cancellative subtraction, decorated. The cancellative operations are not in
+    /// the fundamental-theorem family: they make no definedness or continuity
+    /// promise, so the local decoration is the bottom non-NaI grade `trv`, and its
+    /// meet with any input decoration is `trv`. The vectors confirm every non-NaI
+    /// result is `trv`, `com`-input pairs included. A `NaI` input still poisons the
+    /// result.
+    #[must_use]
+    pub fn cancel_minus(self, rhs: Self) -> Self {
+        if self.is_nai() || rhs.is_nai() {
+            return Self::nai();
+        }
+        Self::pack(self.x.cancel_minus(rhs.x), Decoration::Trv)
+    }
+
+    /// Cancellative addition, decorated. The sibling of
+    /// [`cancel_minus`](DecoratedInterval::cancel_minus), grading `trv` for the
+    /// same reason.
+    #[must_use]
+    pub fn cancel_plus(self, rhs: Self) -> Self {
+        if self.is_nai() || rhs.is_nai() {
+            return Self::nai();
+        }
+        Self::pack(self.x.cancel_plus(rhs.x), Decoration::Trv)
+    }
 }
 
 impl<F: RoundFloat + round_float::RoundTranscendental> DecoratedInterval<F> {

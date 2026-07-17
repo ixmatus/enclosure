@@ -61,6 +61,10 @@ required-features = ["fixture"]
 name = "point_functions_fixture"
 required-features = ["fixture"]
 
+[[test]]
+name = "cancel_fixture"
+required-features = ["fixture"]
+
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"

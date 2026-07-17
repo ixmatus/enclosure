@@ -8,6 +8,17 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Added
 
+- The cancellative operations `cancel_minus` and `cancel_plus` on `Interval<F>`
+  and `DecoratedInterval<F>` (bare `F: RoundFloat`). `cancel_minus(x, y)` recovers
+  the tightest `z` with `y + z` enclosing `x`; `cancel_plus(x, y)` is
+  `cancel_minus(x, -y)`. The width gate certifies `wid(y) <= wid(x)` through the
+  addition rearrangement `x_lo + y_hi <= x_hi + y_lo` (exact on a
+  correctly-rounded backend, conservative toward Entire on the loose fixture), and
+  the endpoints round outward per the defining property so the recovery stays
+  sound. Neither is a fundamental-theorem operation, so the decorated forms grade
+  `trv` throughout; `NaI` propagates. Test lane `tests/cancel_fixture.rs`
+  transcribes the ITF1788 `libieeep1788_cancel.itl` vectors and adds
+  defining-property, round-trip, `cancel_plus` identity, and totality lanes.
 - The point-function battery: `abs`, `min`, `max`, and `sign` on `Interval<F>`
   and `DecoratedInterval<F>` (bare `F: RoundFloat`), and `ceil`, `floor`,
   `trunc`, `round_ties_to_even`, and `round_ties_to_away` behind

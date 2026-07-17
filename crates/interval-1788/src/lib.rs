@@ -50,10 +50,14 @@
 //! [`point`] (`abs`, `min`, `max`, `sign` on bare [`RoundFloat`]; `ceil`,
 //! `floor`, `trunc`, `round_ties_to_even`, `round_ties_to_away` behind the
 //! [`RoundInteger`] extension trait), the first operations to earn the `def`
-//! decoration. Not yet present, and named rather than implied: the rest of the
-//! elementary set (the trigonometric and hyperbolic functions, `pow`), reverse
-//! operations, `mid`/`rad` and the ordering relations, Level 2 (text I/O, the
-//! datum model), and conformance against the ITF1788 vector suite. The roadmap
+//! decoration; and the cancellative operations of [`cancel`]
+//! ([`cancel_minus`](Interval::cancel_minus) and
+//! [`cancel_plus`](Interval::cancel_plus), which recover an interval after a
+//! known addition and always grade `trv`). Not yet present, and named rather
+//! than implied: the rest of the elementary set (the trigonometric and
+//! hyperbolic functions, `pow`), reverse operations, `mid`/`rad` and the
+//! ordering relations, Level 2 (text I/O, the datum model), and conformance
+//! against the ITF1788 vector suite. The roadmap
 //! is the full set-based flavor; what is implemented at any version is stated
 //! per module.
 //!
@@ -70,6 +74,7 @@
 #[cfg(feature = "std")]
 extern crate std;
 
+pub mod cancel;
 pub mod decorated;
 pub mod decoration;
 pub mod elementary;

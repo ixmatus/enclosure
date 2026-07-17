@@ -27,6 +27,8 @@ consumers:
   - crates/interval-1788/tests/point_functions_fixture.rs (abs, min, max, sign,
     ceil, floor, trunc, roundTiesToEven, roundTiesToAway vectors, bare and
     decorated, from libieeep1788_elem.itl)
+  - crates/interval-1788/tests/cancel_fixture.rs (cancelMinus and cancelPlus
+    vectors, bare and decorated, from libieeep1788_cancel.itl)
 verification:
   - none yet (the conformance lane that will consume these vectors is roadmap work)
 sha256:
