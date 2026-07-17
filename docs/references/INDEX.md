@@ -19,6 +19,8 @@ and the accretion ritual.
 - [IEEE P1788.1/D9.8 draft (March 2017)](p1788-1-d98-draft.md) — free clause-level proxy for the profile; Annex A settled the v1.0 required-op boundary
 - [Goldberg 1991](goldberg-1991.md) — the free floating point exposition; first proxy for 754
 - [Muller et al, Handbook of Floating-Point Arithmetic](muller-handbook-fp.md) — the modern professional reference; second proxy for 754
+- [Ogita, Rump & Oishi 2005, accurate sum and dot product](ogita-rump-oishi-2005.md) — the error-free transforms behind the tight f64 backend and the future reductions
+- [Boldo & Daumas 2003, representable correcting terms](boldo-daumas-2003.md) — where the EFT premise holds under underflow; source dead, Wayback survives
 - [Revol 2017, introduction to IEEE 1788-2015](revol-1788-introduction.md) — the open exposition spec.rs cites; PDF freshly archived
 - [musl libm accuracy statement](musl-libm-accuracy.md) — the external claim the f64 transcendental margin rests on, quoted verbatim
 - [Comba & Stolfi 1993, affine arithmetic](comba-stolfi-1993.md) — the founding AA paper; SIBGRAPI'93, freshly archived
