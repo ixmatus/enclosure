@@ -34,6 +34,12 @@ consumers:
   - crates/interval-1788/tests/trig_pow_fixture.rs (sin, cos, tan, sinh, cosh,
     tanh, pow vectors bare and decorated from libieeep1788_elem.itl, and the
     three rootn vectors from c-xsc.itl, the only rootn cases in the corpus)
+  - crates/interval-1788/tests/inverse_fixture.rs (asin, acos, atan, asinh, acosh,
+    atanh, exp2, exp10, log2, log10, pown vectors bare and decorated from
+    libieeep1788_elem.itl; hex-float literals parsed in-test rather than
+    pre-converted)
+  - crates/interval-1788/tests/atan2_fixture.rs (the whole atan2.itl transcribed,
+    plus the branch-cut and origin decoration cases from libieeep1788_elem.itl)
   - crates/interval-1788/tests/numeric_boolean_fixture.rs (mid, rad, midRad from
     libieeep1788_num.itl; equal, less, strictLess, precedes, strictPrecedes and
     the decorated NaI rule from libieeep1788_bool.itl; the sixteen overlap states,

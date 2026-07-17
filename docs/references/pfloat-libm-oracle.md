@@ -19,12 +19,20 @@ consumers:
   - docs/decisions/0002-affine-elementary-functions.md
   - crates/round-float/docs/decisions/0001-round-transcendental-extension-trait.md
   - docs/decisions/0007-transcendental-growth-round-two.md (round two truth source; coverage verified at workspace level 2026-07-16)
+  - crates/round-float/src/f64_impl.rs (ARC_HYPERBOLIC_MARGIN: the pinned rev's asinh/acosh/atanh are the source that measured the margin, not merely a check of it)
 verification:
   - crates/elementary-oracle/tests/oracle.rs
 sha256: none
 notes: >-
   The truth source of the nightly oracle lane: correctly rounded exp and ln
-  values the f64 fixture's and affine-arith's enclosures must bracket. Sibling
+  values the f64 fixture's and affine-arith's enclosures must bracket. Round two
+  (ADR-0007) added grids for asin/acos/atan, asinh/acosh/atanh, exp2/exp10,
+  log2/log10, all exposed by the pinned rev; the arc-hyperbolic grid is promoted
+  from check to anchor because it MEASURED ARC_HYPERBOLIC_MARGIN (worst observed
+  libm error 1 ulp). The pinned rev has no atan2, so the two-argument case rides
+  the correctly rounded atan composition (atan2(y, x) = atan(y / x)) on the
+  positive-abscissa half-plane; the branch-cut and origin semantics are pinned by
+  the interval vectors instead. No function fell back to astro-float. Sibling
   estate crate, same author; the git pin makes the lane reproducible.
 ---
 
