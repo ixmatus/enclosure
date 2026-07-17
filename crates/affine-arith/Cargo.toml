@@ -45,6 +45,10 @@ name = "elementary_fixture"
 required-features = ["fixture"]
 
 [[test]]
+name = "trig_fixture"
+required-features = ["fixture"]
+
+[[test]]
 name = "persistent_fixture"
 required-features = ["fixture"]
 

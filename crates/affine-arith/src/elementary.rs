@@ -48,7 +48,18 @@ impl<'id, F: RoundFloat> AffineForm<'id, F> {
     /// scaled coefficient `α·xᵢ` into the single fresh symbol. This mirrors the
     /// multiply, which folds its bilinear remainder and accumulated roundoff the
     /// same way.
-    fn linearize(&self, alpha: F, r_lo: F, r_hi: F, src: &mut SymbolSource<'id>) -> Self {
+    ///
+    /// `pub(crate)` so the sibling `trig` module's per-arc trigonometric,
+    /// hyperbolic, and power fits reuse the same one-symbol builder rather than
+    /// route through `scale`/`add` (which would mint three fresh symbols and
+    /// compound three outward bands).
+    pub(crate) fn linearize(
+        &self,
+        alpha: F,
+        r_lo: F,
+        r_hi: F,
+        src: &mut SymbolSource<'id>,
+    ) -> Self {
         let two = F::ONE.add_up(F::ONE);
         // β anywhere in [r_lo, r_hi] is sound: the up-rounded one-sided gaps below
         // make δ dominate both edges of the band whatever β rounded to.

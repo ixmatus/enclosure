@@ -44,3 +44,32 @@ v1.0; before then the API may break between 0.x releases.
     from different sources, whose symbols would otherwise collide and break the
     enclosure guarantee. The single-source precondition is enforced by the type
     system rather than left to the caller.
+
+- Per-arc trigonometric, hyperbolic, and power fits (`trig` module, decision
+  record 0005 part 4).
+  - `AffineForm::sin` and `AffineForm::cos` on a `RoundTrig` backend: the
+    Chebyshev secant-slope fit when the reduced range lies within a single
+    concavity arc (between the inflection points `k·π` for `sin`, `π/2 + k·π` for
+    `cos`), decided against the pi enclosure. A range spanning an arc boundary, or
+    sitting within a pi-bracket width of one, returns `None` so the caller falls
+    back to the interval arm rather than guess the arc (the pi-ambiguity rule).
+  - `AffineForm::sinh`, `AffineForm::cosh`, and `AffineForm::tanh` on a
+    `RoundHyperbolic` backend: `cosh` fits every finite range (convex
+    everywhere); `sinh` and `tanh` fit on a range not straddling zero, where
+    their second derivative keeps one sign, and return `None` otherwise.
+  - `AffineForm::pow_scalar` on a `RoundTranscendental` backend: the real power
+    `x^y` for a scalar exponent, by the `exp`/`ln` composition `exp(y·ln x)` on
+    the positive domain (the recorded frugal v1 choice; a direct bivariate fit is
+    future work).
+  - The interior residual extremum, which `exp`/`ln` locate through their inverse,
+    is bounded here by the classical linear-interpolation error `M·(b − a)²/8`
+    (`M` an upper bound on `|f''|` over the arc) because the backend exposes no
+    inverse. The band is therefore a documented sound over-estimate, not the true
+    minimax: the widening factor is at most `π²/8 ≈ 1.23` over a full `sin`/`cos`
+    arc, about `1.3` for `tanh` (whose global curvature bound `1` exceeds the true
+    `4/(3√3)`), and grows with range width for the exponentially-curved hyperbolic
+    fits. A property lane over the f64 fixture checks pointwise enclosure where
+    each fit applies, the decline cases (arc-boundary and zero straddles, the
+    pi-ambiguity decline), the structural collapse of `sin(x) − sin(x)`, and
+    measures the `sin` fit decline rate (about `0.50` over widths uniform in
+    `[0.1, 3]`, per decision record 0005 consequence (c)).
