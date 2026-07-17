@@ -43,8 +43,14 @@ consumers:
     ieee1788-exceptions.itl, and the textToInterval cases of libieeep1788_class.itl;
     hex, decimal, rational, and uncertain-form literals; the signal cases mapped to
     Result::Err)
+  - crates/round-float/tests/reduction_conformance.rs (all 15 assertions of
+    libieeep1788_reduction.itl over the TightF64 Kulisch accumulator: sum, sumAbs,
+    sumSquare, and dot in the nearest mode, including the dot cancellation vector
+    that only exact accumulation answers)
 verification:
-  - none yet (the conformance lane that will consume these vectors is roadmap work)
+  - the reduction vectors (libieeep1788_reduction.itl) are wired into
+    round-float's reduction_conformance.rs over TightF64; the rest of the corpus
+    awaits the interval conformance lane (roadmap work)
 sha256:
   - dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551  vendor/itf1788-framework/COPYING.LESSER
   - cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30  vendor/itf1788-framework/LICENSE
@@ -104,7 +110,12 @@ and hex literals), and decoration plumbing. Decorations are genuinely exercised:
    implementations.
 4. Thin exception coverage: ~71 `signal` assertions, concentrated in
    constructor and class files.
-5. Reductions minimal: 16 assertions, nearest rounding only.
+5. Reductions minimal: 15 assertions (3 sum, 3 sumAbs, 3 sumSquare, 6 dot),
+   nearest rounding only. The count is 15, not the 16 the round-float ADR-0008
+   text states; that 16 is the trait's method count (4 operations by 4 rounding
+   modes) conflated with the corpus assertion count. The corpus fixes no directed
+   mode, so round-float's directed reductions rest on the astro-float exact-reference
+   lane and the oracle-free mode-consistency lane rather than on these vectors.
 6. Set based flavor only (the standard defines no other; Kaucher/modal absent).
 7. Inherited sampling bias: the corpus is the union of four libraries' own unit
    tests; density mirrors what those libraries chose to test.

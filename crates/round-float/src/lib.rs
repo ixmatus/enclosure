@@ -65,6 +65,12 @@ mod tight_f64;
 #[cfg(feature = "f64-tight")]
 pub use tight_f64::TightF64;
 
+// The integer Kulisch accumulator carrying `TightF64`'s `RoundReduction` instance.
+// The trait itself is defined below unconditionally, so any backend may implement
+// it without the tight feature; only the `TightF64` implementation is gated.
+#[cfg(feature = "f64-tight")]
+mod kulisch;
+
 /// A floating-point type that supports the outward-directed arithmetic rigorous
 /// enclosure methods are built on.
 ///
@@ -367,4 +373,103 @@ pub trait RoundPow: RoundFloat {
     /// An upper bound on the exact `n`-th root `self^(1/n)` (requires `n >= 1`; an
     /// even `n` requires `self >= 0`).
     fn rootn_up(self, n: u32) -> Self;
+}
+
+/// Correctly rounded vector reductions, layered above [`RoundFloat`], and the
+/// family's first tightness-mandatory trait.
+///
+/// The four reductions of IEEE 1788-2015 (clause 12.2.12) act on vectors of
+/// numbers rather than intervals, so they support the verified linear algebra
+/// the interval layer is built for. [`sum`](RoundReduction::sum_to_nearest) adds
+/// a vector, [`sum_abs`](RoundReduction::sum_abs_to_nearest) adds the absolute
+/// values, [`sum_square`](RoundReduction::sum_square_to_nearest) adds the squares
+/// (the standard's `sumSquare`), and [`dot`](RoundReduction::dot_to_nearest) adds
+/// the elementwise products of two equal-length vectors. Each reduction is
+/// offered in the four IEEE rounding directions with the same no-enum style the
+/// directed arithmetic uses, the direction fixed at the call site: `_down`
+/// toward minus infinity, `_up` toward plus infinity, `_to_nearest` to the
+/// nearest float with ties to even, and `_to_zero` toward zero.
+///
+/// # Correct rounding is the contract, not an upgrade
+///
+/// Every other trait in this crate takes soundness as the obligation and
+/// tightness as a quality a backend may add. This trait inverts that posture:
+/// the result MUST be the exact mathematical value of the reduction, rounded
+/// ONCE in the named direction. A reduction whose `_to_nearest` is not the
+/// correctly rounded exact value is not a loose version of the operation; it is
+/// a different operation. **A backend that cannot deliver correct rounding must
+/// therefore not implement this trait.** The `f64` fixture does not: a directed
+/// naive loop bounds a sum soundly, but no cheap loop yields the correctly
+/// rounded nearest of the exact sum, and a trait instance honoring three
+/// directions faithfully and one vacuously would be exactly the sound-but-vacuous
+/// default the family rejects. Capability honesty outranks coverage here. See
+/// workspace decision record 0008.
+///
+/// # Special values
+///
+/// The reductions take the extended-real exact-sum semantics the conformance
+/// corpus pins. Any NaN input gives NaN. For `sum` and `dot`, infinities of both
+/// signs among the (extended-real) terms give NaN, and infinities of a single
+/// sign give that infinity; a `dot` pairing a zero with an infinity gives NaN
+/// (the indeterminate `0 * inf`). For `sum_abs` and `sum_square`, whose terms are
+/// never negative, any infinity gives positive infinity and only NaN poisons the
+/// result. A finite product that would overflow `f64` is still a finite real and
+/// is accumulated exactly, never treated as an infinity.
+///
+/// # The empty vector and the sign of an exact zero
+///
+/// The empty vector's value is the operation's identity, zero. The sign of that
+/// zero, and of any exact-zero result reached by cancellation, follows the IEEE
+/// directed-rounding convention: `_down` (toward minus infinity) yields `-0`, and
+/// `_up`, `_to_nearest`, and `_to_zero` yield `+0`. The precise clause text for
+/// the empty-reduction sign is a paywalled corner the corpus does not exercise;
+/// this convention is pinned to the reference implementation's MPFR-backed
+/// behavior and recorded as an unverified corner in workspace decision record
+/// 0008. A nonzero result that underflows to zero keeps the sign of its exact
+/// value, as IEEE rounding requires.
+pub trait RoundReduction: RoundFloat {
+    /// The exact sum of `values`, rounded toward minus infinity.
+    fn sum_down(values: &[Self]) -> Self;
+    /// The exact sum of `values`, rounded toward plus infinity.
+    fn sum_up(values: &[Self]) -> Self;
+    /// The exact sum of `values`, rounded to nearest (ties to even).
+    fn sum_to_nearest(values: &[Self]) -> Self;
+    /// The exact sum of `values`, rounded toward zero.
+    fn sum_to_zero(values: &[Self]) -> Self;
+
+    /// The exact sum of the absolute values of `values`, rounded toward minus
+    /// infinity.
+    fn sum_abs_down(values: &[Self]) -> Self;
+    /// The exact sum of the absolute values of `values`, rounded toward plus
+    /// infinity.
+    fn sum_abs_up(values: &[Self]) -> Self;
+    /// The exact sum of the absolute values of `values`, rounded to nearest
+    /// (ties to even).
+    fn sum_abs_to_nearest(values: &[Self]) -> Self;
+    /// The exact sum of the absolute values of `values`, rounded toward zero.
+    fn sum_abs_to_zero(values: &[Self]) -> Self;
+
+    /// The exact sum of the squares of `values`, rounded toward minus infinity.
+    fn sum_square_down(values: &[Self]) -> Self;
+    /// The exact sum of the squares of `values`, rounded toward plus infinity.
+    fn sum_square_up(values: &[Self]) -> Self;
+    /// The exact sum of the squares of `values`, rounded to nearest (ties to
+    /// even).
+    fn sum_square_to_nearest(values: &[Self]) -> Self;
+    /// The exact sum of the squares of `values`, rounded toward zero.
+    fn sum_square_to_zero(values: &[Self]) -> Self;
+
+    /// The exact dot product of `a` and `b`, rounded toward minus infinity. The
+    /// caller owns the precondition that the slices have equal length; an
+    /// implementation asserts it.
+    fn dot_down(a: &[Self], b: &[Self]) -> Self;
+    /// The exact dot product of `a` and `b`, rounded toward plus infinity. Equal
+    /// lengths, a caller-owned precondition, asserted.
+    fn dot_up(a: &[Self], b: &[Self]) -> Self;
+    /// The exact dot product of `a` and `b`, rounded to nearest (ties to even).
+    /// Equal lengths, a caller-owned precondition, asserted.
+    fn dot_to_nearest(a: &[Self], b: &[Self]) -> Self;
+    /// The exact dot product of `a` and `b`, rounded toward zero. Equal lengths,
+    /// a caller-owned precondition, asserted.
+    fn dot_to_zero(a: &[Self], b: &[Self]) -> Self;
 }
