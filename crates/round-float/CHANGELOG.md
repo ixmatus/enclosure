@@ -8,6 +8,42 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Added
 
+- `RoundInverseTrig`, `RoundInverseHyperbolic`, and `RoundExpBases`, the round-two
+  transcendental extension traits (`: RoundFloat`): inverse trigonometric
+  functions with the pi enclosure and the two-argument `atan2` (argument order as
+  `f64::atan2`), inverse hyperbolics, and the base-2/base-10 exponentials and
+  logarithms. The `f64` fixture implements all three behind the `f64` feature:
+  the goal-covered functions reuse the shipped `TRANSCENDENTAL_MARGIN` doctrine
+  with closed range clamps at every endpoint attainable within one ulp; the arc
+  hyperbolics carry their own `ARC_HYPERBOLIC_MARGIN` (16 units in `2^-52`),
+  anchored empirically against the pfloat-libm oracle (worst observed libm 0.2.16
+  error 1 ulp, headroom past tenfold) because musl's accuracy goal excepts them,
+  with the anchor stated at the constant. Workspace decision record 0007.
+- `RoundReduction`, the family's first tightness-mandatory extension trait: the
+  four IEEE 1788-2015 reduction operations (`sum`, `sum_abs`, `sum_square`,
+  `dot`) in the four rounding directions, sixteen methods whose contract is the
+  exact mathematical value rounded once. The `f64` fixture deliberately does not
+  implement it (a directed loop cannot deliver a correctly rounded nearest);
+  `TightF64` does, behind `f64-tight`, through an integer Kulisch accumulator: a
+  67-limb (4288-bit) two's complement fixed-point integer that decomposes inputs
+  by `to_bits`, multiplies significands exactly into `u128`, and rounds once at
+  extraction, with no float arithmetic between decomposition and that rounding.
+  Verified by the 15 ITF1788 reduction vectors, an astro-float exact-reference
+  property lane, oracle-free mode-consistency properties, and four Kani-proved
+  harnesses over the carry and shift-index logic. Workspace decision record 0008.
+- `RoundLargestFinite`, a one-constant capability trait (`: RoundFloat`) exposing
+  the format's largest finite value exactly (`LARGEST_FINITE`), implemented by
+  both `f64` backends with `f64::MAX`; the datum IEEE 1788's Level 2 realmax
+  midpoint convention requires. Workspace decision record 0009.
+
+### Fixed
+
+- The `RoundHyperbolic` contract documentation claimed a `tanh` result inside the
+  open interval `(-1, 1)`; the open form is unsound at the saturation shoulders
+  (the true `tanh` approaches the endpoints closer than one ulp, so the endpoint
+  is the tightest sound far bound), and the shipped fixture has always clamped
+  closed. The doc now states the closed range; workspace decision record 0005
+  carries the errata.
 - `RoundTrig`, `RoundHyperbolic`, and `RoundPow`, three per-family transcendental
   extension traits (`: RoundFloat`) for the trigonometric, hyperbolic, and power
   functions, each independently optional so a backend lands the families on its
