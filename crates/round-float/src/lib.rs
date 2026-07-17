@@ -40,12 +40,30 @@
 //! and exercised by host property tests, in both `interval-1788` and
 //! `affine-arith`, with no heavy dependency. A correctly-rounded backend makes
 //! the same operations tight; the fixture never does, by design.
+//!
+//! # The tight f64 instance
+//!
+//! Behind the `f64-tight` feature, this crate provides `TightF64`, a newtype
+//! over `f64` whose [`RoundFloat`] instance is correctly rounded: every directed
+//! method returns the nearest representable bound on the correct side. It derives
+//! the exact sign of each operation's rounding error from an error-free transform
+//! (`TwoSum`, `TwoProduct` via `libm::fma`, and FMA residuals) and steps one float
+//! outward only when the exact result is unrepresentable. This is the fast native
+//! tight backend the conformance lane needs; the fixture and the tight instance
+//! coexist because they are distinct types. The `tight_f64` module docs carry the
+//! numbered laws; see round-float decision record 0002.
 
 #![no_std]
 #![forbid(unsafe_code)]
 
 #[cfg(feature = "f64")]
 mod f64_impl;
+
+#[cfg(feature = "f64-tight")]
+mod tight_f64;
+
+#[cfg(feature = "f64-tight")]
+pub use tight_f64::TightF64;
 
 /// A floating-point type that supports the outward-directed arithmetic rigorous
 /// enclosure methods are built on.
@@ -165,4 +183,188 @@ pub trait RoundTranscendental: RoundFloat {
     fn ln_down(self) -> Self;
     /// An upper bound on the exact `ln(self)` (requires `self > 0`).
     fn ln_up(self) -> Self;
+}
+
+/// Rounding of a float to an integral value, layered above [`RoundFloat`].
+///
+/// These are the point functions that map a float to a nearby integer: round
+/// toward minus infinity ([`floor`](RoundInteger::floor)), toward plus infinity
+/// ([`ceil`](RoundInteger::ceil)), toward zero ([`trunc`](RoundInteger::trunc)),
+/// and to the nearest integer with the two standard tie rules
+/// ([`round_ties_to_even`](RoundInteger::round_ties_to_even),
+/// [`round_ties_to_away`](RoundInteger::round_ties_to_away)). The interval crate
+/// needs them for the IEEE 1788 integer-rounding point functions; they are not
+/// part of the common core [`RoundFloat`], so a backend opts in by implementing
+/// this trait, exactly as it opts into [`RoundTranscendental`] (round-float
+/// decision record 0001, workspace decision record 0005 on per-family capability
+/// traits).
+///
+/// # Every method is exact, so there is no down/up split
+///
+/// Each result is an integral value that is representable in any binary or
+/// decimal floating-point format the backend might use: the integers within a
+/// format's contiguous-integer range are all representable, and above that range
+/// every finite value is already integral, so rounding to an integer returns it
+/// unchanged. The operation therefore never rounds, and there is no lower/upper
+/// bound to distinguish. This is the same reason [`negate`](RoundFloat::negate)
+/// is a single undirected method rather than a `negate_down`/`negate_up` pair: an
+/// exact operation carries no rounding direction. The interval layer relies on
+/// the exactness, taking the image of `[a, b]` under a monotone step function as
+/// `[op(a), op(b)]` with no outward widening.
+///
+/// # Accepted duplication with `RoundTrig`
+///
+/// Workspace decision record 0005 gives the trigonometric trait `RoundTrig` its
+/// own exact `floor` for argument reduction (extracting the multiple of pi). A
+/// backend that implements both `RoundInteger` and `RoundTrig` therefore supplies
+/// `floor` twice. The duplication is accepted, the same trade that record makes
+/// for the pi pair: keeping [`RoundFloat`] frozen and each capability trait
+/// self-contained is worth one repeated method. See round-float decision record
+/// 0003.
+pub trait RoundInteger: RoundFloat {
+    /// The largest integral value not greater than `self` (round toward minus
+    /// infinity). Exact.
+    fn floor(self) -> Self;
+    /// The smallest integral value not less than `self` (round toward plus
+    /// infinity). Exact.
+    fn ceil(self) -> Self;
+    /// The integral part of `self`, dropping the fraction (round toward zero).
+    /// Exact.
+    fn trunc(self) -> Self;
+    /// The nearest integral value, with a tie (a half-integer) resolved to the
+    /// even neighbor. This is IEEE 754 `roundToIntegralTiesToEven`. Exact.
+    fn round_ties_to_even(self) -> Self;
+    /// The nearest integral value, with a tie (a half-integer) resolved to the
+    /// neighbor of larger magnitude. This is IEEE 754
+    /// `roundToIntegralTiesToAway`. Exact.
+    fn round_ties_to_away(self) -> Self;
+}
+
+/// Outward-directed trigonometric functions, layered above [`RoundFloat`].
+///
+/// The three families `sin`/`cos`, `tan`, and the reduction constants ride one
+/// trait because argument reduction couples them: reducing an argument modulo a
+/// period is a subtraction of multiples of pi against a constant no radix-two or
+/// radix-ten format represents exactly, so a backend that offers `sin` at all
+/// owes an enclosure of pi ([`pi_down`](RoundTrig::pi_down) /
+/// [`pi_up`](RoundTrig::pi_up)) and an exact [`floor`](RoundTrig::floor) (to
+/// extract the multiple). A backend that never implements trigonometry owes none
+/// of that, which is why the constants live here and not on the core. See
+/// workspace decision record 0005.
+///
+/// # The contract each method must honor
+///
+/// For a finite `self`, [`sin_down`](RoundTrig::sin_down) returns a float less
+/// than or equal to the exact real `sin(self)`, and
+/// [`sin_up`](RoundTrig::sin_up) one greater than or equal to it; likewise for
+/// `cos` and `tan`. The results of `sin` and `cos` lie in `[-1, 1]` and of `tan`
+/// in the extended reals (near a pole `tan` returns the large finite value the
+/// backend computes; the interval layer, not the fixture, manufactures the
+/// unbounded pole semantics). As with [`RoundFloat`], soundness (the bound is
+/// never on the wrong side) is the obligation and tightness is a quality a
+/// correctly-rounded backend may add; here the trust in soundness rests on the
+/// backend's argument reduction staying faithful at every finite magnitude (for
+/// the f64 fixture, musl's Payne-Hanek reduction; see the `musl-libm-accuracy`
+/// reference entry).
+pub trait RoundTrig: RoundFloat {
+    /// A lower bound on the exact `sin(self)`.
+    fn sin_down(self) -> Self;
+    /// An upper bound on the exact `sin(self)`.
+    fn sin_up(self) -> Self;
+    /// A lower bound on the exact `cos(self)`.
+    fn cos_down(self) -> Self;
+    /// An upper bound on the exact `cos(self)`.
+    fn cos_up(self) -> Self;
+    /// A lower bound on the exact `tan(self)` (the caller owns the precondition
+    /// that `self` is not at a pole; the interval layer supplies the pole
+    /// semantics).
+    fn tan_down(self) -> Self;
+    /// An upper bound on the exact `tan(self)`.
+    fn tan_up(self) -> Self;
+
+    /// The largest backend float not exceeding the mathematical pi: the lower
+    /// endpoint of the format's enclosure of pi, used to reduce arguments.
+    fn pi_down() -> Self;
+    /// The smallest backend float not below the mathematical pi: the upper
+    /// endpoint of the format's enclosure of pi.
+    fn pi_up() -> Self;
+
+    /// The largest integral value not greater than `self` (round toward minus
+    /// infinity). Exact in every float format.
+    ///
+    /// This duplicates [`RoundInteger::floor`] by workspace decision record
+    /// 0005's accepted trade: the reduction obligation is a trigonometric one, so
+    /// `RoundTrig` carries its own `floor` rather than depend on `RoundInteger`,
+    /// keeping each capability trait self-contained and [`RoundFloat`] frozen. A
+    /// backend implementing both traits supplies `floor` twice.
+    fn floor(self) -> Self;
+}
+
+/// Outward-directed hyperbolic functions, layered above [`RoundFloat`].
+///
+/// The family is reduction-free (no periodic argument reduction and so no pi
+/// enclosure), which is why it is a trait separate from [`RoundTrig`]: a backend
+/// lands the two families on independent schedules. See workspace decision
+/// record 0005.
+///
+/// # The contract each method must honor
+///
+/// For a finite `self`, [`sinh_down`](RoundHyperbolic::sinh_down) returns a float
+/// less than or equal to the exact real `sinh(self)` and
+/// [`sinh_up`](RoundHyperbolic::sinh_up) one greater than or equal to it;
+/// likewise for `cosh` and `tanh`. The result of `cosh` is at least `1`, of
+/// `tanh` in `(-1, 1)`, and of `sinh` in the extended reals (an argument past the
+/// overflow shoulder gives the `[largest_finite, +inf]` style bounds the exp
+/// fixture established). Soundness is the obligation; tightness is a backend
+/// quality.
+pub trait RoundHyperbolic: RoundFloat {
+    /// A lower bound on the exact `sinh(self)`.
+    fn sinh_down(self) -> Self;
+    /// An upper bound on the exact `sinh(self)`.
+    fn sinh_up(self) -> Self;
+    /// A lower bound on the exact `cosh(self)`.
+    fn cosh_down(self) -> Self;
+    /// An upper bound on the exact `cosh(self)`.
+    fn cosh_up(self) -> Self;
+    /// A lower bound on the exact `tanh(self)`.
+    fn tanh_down(self) -> Self;
+    /// An upper bound on the exact `tanh(self)`.
+    fn tanh_up(self) -> Self;
+}
+
+/// Outward-directed power and root functions, layered above [`RoundFloat`].
+///
+/// [`pow_down`](RoundPow::pow_down) / [`pow_up`](RoundPow::pow_up) bound the real
+/// power `self^exp`, and [`rootn_down`](RoundPow::rootn_down) /
+/// [`rootn_up`](RoundPow::rootn_up) bound the `n`-th root `self^(1/n)`. See
+/// workspace decision record 0005.
+///
+/// # The contract each method must honor, and the caller-owned preconditions
+///
+/// For `pow`, the real power `self^exp` is defined on `self > 0` (all `exp`) and
+/// at `self == 0` for `exp > 0` (value zero). The caller owns that domain: with
+/// `self > 0`, [`pow_down`](RoundPow::pow_down) returns a float less than or equal
+/// to `self^exp` and [`pow_up`](RoundPow::pow_up) one greater than or equal to it;
+/// the interval layer owns the set semantics of the edges (a base reaching zero, a
+/// negative base, `0^0`). A negative base is outside the real domain and an
+/// implementation may return any value there (the f64 fixture passes libm's NaN
+/// through).
+///
+/// For `rootn`, `n` is the root order and must be at least `1`; `self^(1/n)` is
+/// defined for all `self` when `n` is odd and for `self >= 0` when `n` is even.
+/// The caller owns `n >= 1`; the parity domain restriction (an even root of a
+/// negative base) is the interval layer's to enforce, and an out-of-domain scalar
+/// argument may return any value (the fixture returns NaN). As with
+/// [`RoundFloat`], soundness is the obligation and tightness a backend quality.
+pub trait RoundPow: RoundFloat {
+    /// A lower bound on the exact real power `self^exp` (requires `self >= 0`).
+    fn pow_down(self, exp: Self) -> Self;
+    /// An upper bound on the exact real power `self^exp` (requires `self >= 0`).
+    fn pow_up(self, exp: Self) -> Self;
+    /// A lower bound on the exact `n`-th root `self^(1/n)` (requires `n >= 1`; an
+    /// even `n` requires `self >= 0`).
+    fn rootn_down(self, n: u32) -> Self;
+    /// An upper bound on the exact `n`-th root `self^(1/n)` (requires `n >= 1`; an
+    /// even `n` requires `self >= 0`).
+    fn rootn_up(self, n: u32) -> Self;
 }

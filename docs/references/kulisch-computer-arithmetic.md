@@ -17,6 +17,7 @@ rot-risk: stable-publisher
 provenance-class: secondary
 consumers:
   - docs/references/glossary.md (the enclosure lineage)
+  - docs/decisions/0008-reduction-operations-kulisch-accumulator.md (the accumulator dimensioning and exactness argument)
 verification:
   - none
 sha256: none
@@ -34,6 +35,7 @@ languages and the exact dot product proposals came from it, and the C-XSC
 test vectors in the vendored ITF1788 corpus are its descendants. The registry
 records one archive gap honestly: the De Gruyter publisher page has no
 Wayback snapshot under the current domain or the legacy degruyter.com form,
-and the page bot gates non browser fetches, so save attempts keep failing.
-The DOI and ISBNs carry the pointer durably; a paper copy remains the real
-permacomputing answer for books.
+and the page bot gates non browser fetches, so save attempts keep failing
+(retried and failed again on the 2026-07-17 debt sweep; the gap is now
+recorded as permanent rather than owed). The DOI and ISBNs carry the pointer
+durably; a paper copy remains the real permacomputing answer for books.

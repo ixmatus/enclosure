@@ -23,6 +23,33 @@ fn any_di() -> impl Strategy<Value = DecoratedInterval<f64>> {
     ]
 }
 
+/// Magnitudes that reach `f64::MAX` (and the subnormal floor), so a bounded
+/// operation can overflow to an unbounded result and exercise the demotion:
+/// `MAX` for `+`/`-`/`*`/`mul_add`, the smallest subnormal for `recip`.
+fn wide() -> impl Strategy<Value = f64> {
+    prop_oneof![
+        Just(f64::MAX),
+        Just(f64::MAX / 2.0),
+        Just(-f64::MAX),
+        Just(-f64::MAX / 2.0),
+        Just(f64::from_bits(1)),
+        Just(-f64::from_bits(1)),
+        -1.0e300..1.0e300,
+    ]
+}
+
+/// A decorated interval that can be near-`MAX` bounded (so a bounded operation
+/// overflows), unbounded, empty, or the `NaI`.
+fn wide_di() -> impl Strategy<Value = DecoratedInterval<f64>> {
+    prop_oneof![
+        any_di(),
+        (wide(), wide()).prop_map(|(a, b)| {
+            let (lo, hi) = if a <= b { (a, b) } else { (b, a) };
+            DecoratedInterval::new_dec(Interval::new(lo, hi).unwrap())
+        }),
+    ]
+}
+
 proptest! {
     #[test]
     fn bare_interval_is_the_undecorated_operation(a in any_di(), b in any_di()) {
@@ -73,6 +100,31 @@ proptest! {
             }
             if r.is_nai() {
                 prop_assert!(r.interval().is_empty());
+            }
+        }
+    }
+
+    /// `com` promises a bounded result, so any operation that lands an unbounded
+    /// interval must decorate it strictly below `com`. The wide strategy reaches
+    /// `f64::MAX`, so bounded inputs overflow here rather than only unbounded
+    /// inputs propagating through.
+    #[test]
+    fn an_unbounded_result_is_decorated_below_com(a in wide_di(), b in wide_di()) {
+        prop_assume!(!a.is_nai() && !b.is_nai());
+        let results = [
+            a + b,
+            a - b,
+            a * b,
+            a / b,
+            a.mul_add(b, a),
+            a.sqr(),
+            a.sqrt(),
+            a.recip(),
+            -a,
+        ];
+        for r in results {
+            if !r.interval().is_bounded() {
+                prop_assert!(r.decoration() < Decoration::Com);
             }
         }
     }

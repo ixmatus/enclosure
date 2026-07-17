@@ -57,6 +57,26 @@ required-features = ["fixture"]
 name = "elementary_fixture"
 required-features = ["fixture"]
 
+[[test]]
+name = "point_functions_fixture"
+required-features = ["fixture"]
+
+[[test]]
+name = "cancel_fixture"
+required-features = ["fixture"]
+
+[[test]]
+name = "trig_pow_fixture"
+required-features = ["fixture"]
+
+[[test]]
+name = "numeric_boolean_fixture"
+required-features = ["fixture"]
+
+[[test]]
+name = "text_io_fixture"
+required-features = ["fixture"]
+
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"

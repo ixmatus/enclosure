@@ -34,6 +34,8 @@ condensation folds the tail into one fresh symbol bounding the summed
 magnitude (width preserving by construction), where Girard's box keeps per
 axis structure. The systematic comparisons
 ([kopetzki-schurmann-althoff-2017](kopetzki-schurmann-althoff-2017.md),
-[yang-scott-2018](yang-scott-2018.md)) measure when each wins. Fresh Wayback
-saves were rate limited on 2026-06-11; the recorded snapshot covers the legacy
-HAL URL, and a save of the current hal.science form is owed.
+[yang-scott-2018](yang-scott-2018.md)) measure when each wins. The
+2026-06-11 save of the current hal.science form did land despite that
+session's rate limiting (confirmed on the 2026-07-17 debt sweep):
+web.archive.org/web/20260611090127/https://hal.science/hal-00307003. Both
+HAL forms are now covered.
