@@ -16,8 +16,9 @@ rot-risk: died-once
 provenance-class: secondary
 consumers:
   - crates/round-float/docs/decisions/0002-tight-f64-backend.md (the underflow representability conditions the subnormal case analysis rests on)
+  - crates/round-float/src/tight_f64.rs (the derived safe-zone predicates g_a + g_b >= -1074 for multiply, g_q + g_b >= -1074 for divide, and 2 g_s >= -1074 for square root, plus the Law 6 rescaling boundary)
 verification:
-  - none yet (the tight backend's subnormal hard-case vectors will exercise the conditions)
+  - crates/round-float/tests/tight_oracle.rs (the safe-zone predicates and the rescaling path certified against an independent integer reference oracle over dense subnormal inputs)
 sha256: none
 notes: >-
   The precise answer to "when is the rounding error of an operation itself a

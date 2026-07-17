@@ -40,12 +40,30 @@
 //! and exercised by host property tests, in both `interval-1788` and
 //! `affine-arith`, with no heavy dependency. A correctly-rounded backend makes
 //! the same operations tight; the fixture never does, by design.
+//!
+//! # The tight f64 instance
+//!
+//! Behind the `f64-tight` feature, this crate provides `TightF64`, a newtype
+//! over `f64` whose [`RoundFloat`] instance is correctly rounded: every directed
+//! method returns the nearest representable bound on the correct side. It derives
+//! the exact sign of each operation's rounding error from an error-free transform
+//! (`TwoSum`, `TwoProduct` via `libm::fma`, and FMA residuals) and steps one float
+//! outward only when the exact result is unrepresentable. This is the fast native
+//! tight backend the conformance lane needs; the fixture and the tight instance
+//! coexist because they are distinct types. The `tight_f64` module docs carry the
+//! numbered laws; see round-float decision record 0002.
 
 #![no_std]
 #![forbid(unsafe_code)]
 
 #[cfg(feature = "f64")]
 mod f64_impl;
+
+#[cfg(feature = "f64-tight")]
+mod tight_f64;
+
+#[cfg(feature = "f64-tight")]
+pub use tight_f64::TightF64;
 
 /// A floating-point type that supports the outward-directed arithmetic rigorous
 /// enclosure methods are built on.

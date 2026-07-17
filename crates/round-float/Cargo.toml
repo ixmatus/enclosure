@@ -22,8 +22,29 @@ publish = false
 # property lanes. `libm::sqrt` keeps it no_std-capable.
 f64 = ["dep:libm"]
 
+# The `f64-tight` instance (`TightF64`) is the correctly rounded directed backend:
+# it derives each operation's exact rounding-error sign from an error-free
+# transform and steps one float outward only when the result is unrepresentable.
+# It needs `libm::fma`, `libm::sqrt`, `libm::frexp`, and `libm::scalbn`, all
+# no_std-capable. Additive to `f64`: the fixture and the tight instance coexist.
+f64-tight = ["dep:libm"]
+
 [dependencies]
 libm = { version = "0.2", default-features = false, optional = true }
+
+[dev-dependencies]
+# The tight backend's property and adjacency lanes; matches the sibling crates.
+proptest = "1"
+
+# The adjacency invariant, exactness detection, and the fixture envelope.
+[[test]]
+name = "tight_adjacency_fixture"
+required-features = ["f64-tight", "f64"]
+
+# The independent integer reference oracle and the hard-case vector catalogue.
+[[test]]
+name = "tight_oracle"
+required-features = ["f64-tight", "f64"]
 
 [lints.rust]
 unsafe_code = "forbid"
