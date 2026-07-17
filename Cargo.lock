@@ -336,6 +336,7 @@ name = "round-float"
 version = "0.1.0"
 dependencies = [
  "libm",
+ "proptest",
 ]
 
 [[package]]
