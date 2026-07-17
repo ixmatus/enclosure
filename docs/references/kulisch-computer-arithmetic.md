@@ -17,6 +17,7 @@ rot-risk: stable-publisher
 provenance-class: secondary
 consumers:
   - docs/references/glossary.md (the enclosure lineage)
+  - docs/decisions/0008-reduction-operations-kulisch-accumulator.md (the accumulator dimensioning and exactness argument)
 verification:
   - none
 sha256: none

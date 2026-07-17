@@ -18,6 +18,7 @@ consumers:
   - crates/elementary-oracle/src/lib.rs
   - docs/decisions/0002-affine-elementary-functions.md
   - crates/round-float/docs/decisions/0001-round-transcendental-extension-trait.md
+  - docs/decisions/0007-transcendental-growth-round-two.md (round two truth source; coverage verified at workspace level 2026-07-16)
 verification:
   - crates/elementary-oracle/tests/oracle.rs
 sha256: none

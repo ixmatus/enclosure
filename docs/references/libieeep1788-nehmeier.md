@@ -16,6 +16,7 @@ rot-risk: single-maintainer
 provenance-class: secondary
 consumers:
   - crates/interval-1788/README.md (the "C++ reference" named as behavioral oracle)
+  - docs/decisions/0008-reduction-operations-kulisch-accumulator.md (the reduction mode-enum surface witness, surveyed 2026-07-16)
 verification:
   - none yet (oracle cross checks are manual; no automated lane)
 sha256: none

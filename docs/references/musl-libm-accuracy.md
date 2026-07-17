@@ -16,6 +16,7 @@ provenance-class: primary
 consumers:
   - crates/round-float/src/f64_impl.rs (TRANSCENDENTAL_MARGIN rests on this statement)
   - crates/round-float/docs/decisions/0001-round-transcendental-extension-trait.md
+  - docs/decisions/0007-transcendental-growth-round-two.md (the arc-hyperbolic exception is that record's load-bearing fact)
 verification:
   - crates/elementary-oracle/tests/oracle.rs (the nightly lane discharges the assumption empirically)
 sha256: none
@@ -41,3 +42,11 @@ than five over the stated goal. A goal is not a theorem, which is why the
 nightly oracle lane ([pfloat-libm-oracle](pfloat-libm-oracle.md)) checks the
 bracketing empirically against correctly rounded values over swept grids. The
 Rust port inherits the claim ([rust-libm-crate](rust-libm-crate.md)).
+
+The exception list is itself load bearing: "arc hyperbolics" appear among the
+named exceptions, so `asinh`/`acosh`/`atanh` have NO stated accuracy goal for
+a fixture margin to dominate. Transcendental growth round two
+(workspace ADR-0007) therefore anchors those three margins to measured
+oracle error with headroom rather than to this page, and says so at the
+constants; for every other round-two function (inverse trig, exp2/exp10,
+log2/log10) the sub 1.5 ulp goal covers and the shipped doctrine applies.
