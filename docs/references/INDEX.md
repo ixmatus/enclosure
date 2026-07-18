@@ -8,6 +8,7 @@ and the accretion ritual.
 - [Kashiwagi, kv C++ verified computation library](kv-kashiwagi.md) — oracle candidate for interval outputs; MIT
 - [Rump & Kashiwagi 2015, implementation of affine arithmetic](rump-kashiwagi-2015.md) — literature anchor for ADR-0004 condensation follow-ups
 - [pfloat-libm, the correctly rounded oracle](pfloat-libm-oracle.md) — truth source of the nightly exp/ln and arithmetic certification lanes
+- [astro-float, the reduction oracle](astro-float-oracle.md) — pure Rust arbitrary-precision cross-check behind the Kulisch reduction lanes, with the two 0.9.5 quirks every consumer must work around
 - [de Figueiredo & Stolfi 2004, the AA survey](figueiredo-stolfi-2004.md) — Chebyshev linearization and condensation; the workspace's most cited source
 - [Stolfi & de Figueiredo 1997, the IMPA monograph](stolfi-figueiredo-1997.md) — the approximation theory under the survey; the "course notes" of folklore
 - [The Affine Arithmetic Project page (Stolfi)](stolfi-affine-arith-project.md) — the AA line's hub; publication list and the C library prior art
