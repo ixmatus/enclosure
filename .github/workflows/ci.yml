@@ -56,9 +56,16 @@ jobs:
   # Model checking. The discrete set-based case logic and the decoration lattice
   # are discharged by Kani over the f64 fixture. cargo-kani brings its own
   # toolchain, so the workspace 1.86 pin does not constrain it.
+  #
+  # The timeout is the CBMC-blowup stop loss (ADR-0006, bead enc-otn): every
+  # harness discharges in seconds to minutes, and the observed failure mode is
+  # a formula that never returns, not one that fails. Twenty minutes covers the
+  # three tool installs plus every discharge with wide margin; a run that hits
+  # it is a blowup to diagnose, never a gate to wait out.
   kani:
     name: kani
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: model-checking/kani-github-action@v1
