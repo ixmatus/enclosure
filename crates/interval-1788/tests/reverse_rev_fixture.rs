@@ -23,6 +23,15 @@
 //! rule on a representative sample rather than re-listing the full value grid the
 //! bare tests already pin.
 
+// The corpus's decimal literals are transcribed verbatim: several (the trig
+// candidates near pi and pi/2) approximate the float constants, and one is
+// long enough to trip the separator lint. Substituting `f64::consts` values
+// would silently change a pinned vector wherever the corpus value is
+// deliberately not the nearest float, and separators would break the verbatim
+// text. Transcription fidelity wins over both lints, as `float_cmp` does in
+// the reduction conformance lane.
+#![allow(clippy::approx_constant, clippy::unreadable_literal)]
+
 use interval_1788::{DecoratedInterval, Decoration, Interval};
 
 const INF: f64 = f64::INFINITY;
@@ -67,6 +76,12 @@ fn hx(s: &str) -> f64 {
         m = m * 16 + u64::from(c.to_digit(16).expect("hex digit"));
         frac_len += 1;
     }
+    // A canonical corpus literal (leading hex digit 1, at most thirteen
+    // fraction digits) carries at most 53 significant bits, so the cast is
+    // exact; the assertion turns a non-canonical literal into a loud failure
+    // instead of a silent rounding.
+    assert!(m < (1 << 53), "hex-float mantissa exceeds f64 exact range");
+    #[allow(clippy::cast_precision_loss)]
     let mut val = m as f64;
     let mut e = exp - 4 * frac_len;
     while e > 0 {

@@ -82,6 +82,12 @@ fn hx(s: &str) -> f64 {
         m = m * 16 + u64::from(c.to_digit(16).expect("hex digit"));
         fl += 1;
     }
+    // A canonical corpus literal (leading hex digit 1, at most thirteen
+    // fraction digits) carries at most 53 significant bits, so the cast is
+    // exact; the assertion turns a non-canonical literal into a loud failure
+    // instead of a silent rounding.
+    assert!(m < (1 << 53), "hex-float mantissa exceeds f64 exact range");
+    #[allow(clippy::cast_precision_loss)]
     let mut val = m as f64;
     let mut e = exp - 4 * fl;
     while e > 0 {
@@ -111,9 +117,13 @@ struct Row {
 const fn r(a: Ivl, c: Ivl, x: Ivl, e: Ivl) -> Row {
     Row { a, c, x, e }
 }
+// The wrapper IS the table's cell type: `None` spells the corpus's `[empty]`,
+// so the row constructors return `Some` by design.
+#[allow(clippy::unnecessary_wraps)]
 fn s(l: f64, h: f64) -> Ivl {
     Some((l, h))
 }
+#[allow(clippy::unnecessary_wraps)]
 fn ent() -> Ivl {
     Some((NEG_INF, INF))
 }

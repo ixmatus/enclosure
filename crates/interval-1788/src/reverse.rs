@@ -1059,25 +1059,34 @@ mod tests {
         // Rework regression: a far-but-narrow candidate (the constraint
         // propagation shape) must get real arcs from the landing phase, not
         // the degraded fallback the old from-zero walk hit past its cap.
-        let x = iv(1.0e6, 1.0e6 + 10.0);
-        let c = iv(0.5, 1.0);
-        let r = c.sin_rev(x);
-        assert!(!r.is_empty());
+        let cand = iv(1.0e6, 1.0e6 + 10.0);
+        let constraint = iv(0.5, 1.0);
+        let rev = constraint.sin_rev(cand);
+        assert!(!rev.is_empty());
         // Proper subset: sin(1e6) ~ -0.35 and sin(1e6 + 10) ~ -0.22, both
         // outside [0.5, 1], so both edges of the tight result lie strictly
         // inside the candidate.
-        assert!(r.inf() > x.inf(), "lower edge degraded: {:e}", r.inf());
-        assert!(r.sup() < x.sup(), "upper edge degraded: {:e}", r.sup());
+        assert!(
+            rev.inf() > cand.inf(),
+            "lower edge degraded: {:e}",
+            rev.inf()
+        );
+        assert!(
+            rev.sup() < cand.sup(),
+            "upper edge degraded: {:e}",
+            rev.sup()
+        );
         // The window spans ~1.6 periods, so it contains at least one full
         // preimage arc of width 2*pi/3 ~ 2.09.
-        assert!(r.sup() - r.inf() >= 2.0);
+        assert!(rev.sup() - rev.inf() >= 2.0);
         // Soundness cross-check through the forward battery: every sampled
-        // witness whose forward sine certainly lands in c must be in r.
-        let mut t = x.inf();
-        while t <= x.sup() {
-            let f = Interval::point(t).unwrap().sin();
-            if f.subset(c) {
-                assert!(r.contains(t), "reverse missed t = {t}");
+        // witness whose forward sine certainly lands in the constraint must be
+        // in the reverse result.
+        let mut t = cand.inf();
+        while t <= cand.sup() {
+            let image = Interval::point(t).unwrap().sin();
+            if image.subset(constraint) {
+                assert!(rev.contains(t), "reverse missed t = {t}");
             }
             t += 1.0e-3;
         }

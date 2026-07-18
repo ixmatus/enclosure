@@ -58,6 +58,12 @@ fn hx(s: &str) -> f64 {
         m = m * 16 + u64::from(c.to_digit(16).expect("hex digit"));
         frac_len += 1;
     }
+    // A canonical corpus literal (leading hex digit 1, at most thirteen
+    // fraction digits) carries at most 53 significant bits, so the cast is
+    // exact; the assertion turns a non-canonical literal into a loud failure
+    // instead of a silent rounding.
+    assert!(m < (1 << 53), "hex-float mantissa exceeds f64 exact range");
+    #[allow(clippy::cast_precision_loss)]
     let mut val = m as f64;
     let mut e = exp - 4 * frac_len;
     while e > 0 {
