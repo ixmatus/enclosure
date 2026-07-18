@@ -223,7 +223,7 @@ impl<'id, F: RoundFloat + RoundTrig> AffineForm<'id, F> {
     /// The sine `sin(x̂)`, by the per-arc Chebyshev affine approximation.
     ///
     /// Returns `None` unless the reduced range lies within a single concavity arc
-    /// `[k·π, (k+1)·π]` (see the [module docs](crate::trig) for the arc-membership
+    /// `[k·π, (k+1)·π]` (see the module-level documentation for the arc-membership
     /// and pi-ambiguity rule): a range spanning an inflection point `k·π` has a
     /// residual whose second derivative changes sign, which the one-symbol builder
     /// cannot fit. A non-finite endpoint also declines.
@@ -231,7 +231,7 @@ impl<'id, F: RoundFloat + RoundTrig> AffineForm<'id, F> {
     /// On a single arc `sin'' = −sin` keeps one sign, so `sin` is concave where it
     /// is positive and convex where it is negative; the sign is read from `sin` at
     /// an interior point. The residual band is the sound chord-error over-estimate
-    /// of the [module docs](crate::trig), not the true minimax: the widening factor
+    /// described in the module-level documentation, not the true minimax: the widening factor
     /// is at most `π²/8 ≈ 1.23` over a full arc and larger in relative terms near
     /// an inflection point.
     #[must_use]

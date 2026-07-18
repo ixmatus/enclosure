@@ -40,7 +40,7 @@
 //! value (the restriction is discontinuous), otherwise `com` (or `dac` when a
 //! jump point sits at an endpoint, or the input is unbounded). `abs`, `min`, and
 //! `max` are continuous everywhere and behave like the arithmetic operations
-//! above. The [`step_local`] helper computes this, and the point functions
+//! above. The `step_local` helper computes this, and the point functions
 //! themselves live in this module beside the operations they decorate.
 
 use core::ops::{Add, Div, Mul, Neg, Sub};
