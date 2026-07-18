@@ -83,6 +83,57 @@ impl<'id, F: RoundFloat> AffineForm<'id, F> {
         Self::from_parts(center, terms)
     }
 
+    /// The magnitude `|x₁|` of the sole deviation coefficient of a single-term
+    /// form; `None` for a point or multi-term form.
+    ///
+    /// For a single-term form the exact range is `[x₀ − |x₁|, x₀ + |x₁|]`, and
+    /// both ingredients of a domain decision on it are exact: the magnitude is
+    /// a sign flip ([`negate`](RoundFloat::negate) never rounds) and comparing
+    /// the center against it compares two representable values, which is not
+    /// arithmetic and rounds nothing. The domain gates below use this to decide
+    /// membership against the exact range where the
+    /// [`reduce`](AffineForm::reduce) endpoint, which rounds the radius up and
+    /// the endpoint outward again, can cross a domain boundary the exact range
+    /// does not.
+    ///
+    /// The multi-term analogue would need an error-free summation of the
+    /// coefficient magnitudes (Ogita, Rump and Oishi 2005), but 2Sum recovers
+    /// its error term exactly only under round-to-nearest arithmetic, and the
+    /// directed-only [`RoundFloat`] contract deliberately offers none. So
+    /// multi-term forms keep the reduced-range decision, and an opt-in
+    /// error-free-transform capability trait is the recorded future route.
+    fn single_term_magnitude(&self) -> Option<F> {
+        match self.terms() {
+            [t] => {
+                let c = t.coeff();
+                Some(if c.is_sign_negative() { c.negate() } else { c })
+            }
+            _ => None,
+        }
+    }
+
+    /// A representable, strictly positive lower bound on a single-term form's
+    /// exact infimum `x₀ − |x₁|`: the shared gate of the strictly positive
+    /// domains (`ln`, and `recip` through its positive core).
+    ///
+    /// `None` unless the form is single-term, the exact infimum is strictly
+    /// positive (`x₀ > |x₁|`, an exact comparison), and the sound directed
+    /// bound `x₀.sub_down(|x₁|)`, which the fit must read as its lower
+    /// endpoint, itself stays strictly positive. That last decline concerns an
+    /// exact infimum within one rounding step of zero, whose directed bound
+    /// lands at or below zero: soundness beats the last ulp of tightening, so
+    /// rather than fit from an out-of-domain endpoint the form declines.
+    fn single_term_positive_inf(&self) -> Option<F> {
+        let mag = self.single_term_magnitude()?;
+        if self.center() > mag {
+            let lo = self.center().sub_down(mag);
+            if lo > F::ZERO {
+                return Some(lo);
+            }
+        }
+        None
+    }
+
     /// The square `x̂²`, by the Chebyshev affine approximation.
     ///
     /// `x²` is convex everywhere, so this is total (no domain restriction). Over
@@ -123,12 +174,19 @@ impl<'id, F: RoundFloat> AffineForm<'id, F> {
 
     /// The reciprocal `1/x̂`, by the Chebyshev affine approximation.
     ///
-    /// Returns `None` when the range is not sign stable (`0 ∈ [a, b]`, where the
-    /// true reciprocal is unbounded and no finite affine form can enclose it) or
-    /// when an endpoint, or the slope, is not finite (a range pressed against
-    /// zero whose reciprocal overflows). Unlike interval arithmetic, which can
-    /// answer such a divisor with an unbounded interval, an affine form is
-    /// bounded by construction, so the only sound answer is to decline.
+    /// Returns `None` when the range is not sign stable (`0` is in the range,
+    /// where the true reciprocal is unbounded and no finite affine form can
+    /// enclose it) or when an endpoint, or the slope, is not finite (a range
+    /// pressed against zero whose reciprocal overflows). Unlike interval
+    /// arithmetic, which can answer such a divisor with an unbounded interval,
+    /// an affine form is bounded by construction, so the only sound answer is
+    /// to decline. For a form with one deviation term, sign stability is
+    /// decided on the exact range `[x₀ − |x₁|, x₀ + |x₁|]` with exact
+    /// comparisons, so a form whose outward-rounded reduced endpoint grazes
+    /// zero while its exact range stays sign stable is still fit; a multi-term
+    /// form keeps the reduced-range decision (its exact range would need an
+    /// error-free summation the directed-only [`RoundFloat`] contract cannot
+    /// express).
     ///
     /// A negative range is handled by reflection: `1/x = −1/(−x)`, and negation
     /// is exact, so the positive-range core does the work and the result is
@@ -147,8 +205,20 @@ impl<'id, F: RoundFloat> AffineForm<'id, F> {
         } else if b < F::ZERO {
             self.negate().recip_positive(src).map(|g| g.negate())
         } else {
-            // Zero is in the range: 1/x is unbounded, not a finite affine form.
-            None
+            // Zero is in the outward-rounded reduced range, but a single-term
+            // form's exact range may still be sign stable, decided exactly. The
+            // positive core re-derives its fit endpoint from the same exact
+            // comparison; a negative exact range reflects through the exact
+            // negation first, as above. A form whose exact range contains zero
+            // declines: 1/x is unbounded there, not a finite affine form.
+            let mag = self.single_term_magnitude()?;
+            if self.center() > mag {
+                self.recip_positive(src)
+            } else if self.center().negate() > mag {
+                self.negate().recip_positive(src).map(|g| g.negate())
+            } else {
+                None
+            }
         }
     }
 
@@ -159,7 +229,14 @@ impl<'id, F: RoundFloat> AffineForm<'id, F> {
     /// `α`). The secant slope is `−1/(ab)`.
     fn recip_positive(&self, src: &mut SymbolSource<'id>) -> Option<Self> {
         let iv = self.reduce();
-        let (a, b) = (iv.inf(), iv.sup());
+        let (mut a, b) = (iv.inf(), iv.sup());
+        if a <= F::ZERO {
+            // Reached only through the caller's single-term exact gate: the
+            // reduced endpoint crossed zero though the exact infimum did not.
+            // The fit reads the sound directed lower bound of that infimum,
+            // declining if even the bound rounds out of the domain.
+            a = self.single_term_positive_inf()?;
+        }
         let ab = a.mul_down(b);
         if !ab.is_finite() || ab <= F::ZERO {
             return None;
@@ -184,16 +261,23 @@ impl<'id, F: RoundFloat> AffineForm<'id, F> {
 
     /// The square root `√x̂`, by the Chebyshev affine approximation.
     ///
-    /// Returns `None` unless the whole reduced range is in the domain (`a ≥ 0`): a
+    /// Returns `None` unless the whole range is in the domain (infimum `≥ 0`): a
     /// noise symbol's range cannot be clamped to the nonnegative part the way
-    /// interval arithmetic restricts a domain, so a range dipping below zero has no
-    /// sound affine image. Note this is the *reduced* range: a form built from a
-    /// zero-touching interval such as `[0, b]` reduces to a range whose lower end
-    /// has been rounded a hair below zero, so it too declines; only an exact point
-    /// `{0}` is special-cased to the point `0`. (Restricting to the nonnegative
-    /// part is sound but would let the linear extrapolation report a negative lower
-    /// bound on a square root, which is worse than declining; a tighter
-    /// zero-touching path is left as a later refinement.)
+    /// interval arithmetic restricts a domain, so a range dipping below zero has
+    /// no sound affine image. For a form with one deviation term the decision
+    /// reads the exact range `[x₀ − |x₁|, x₀ + |x₁|]`: the comparison
+    /// `x₀ ≥ |x₁|` rounds nothing, so a form whose outward-rounded reduced
+    /// endpoint dips a hair below zero while its exact range stays inside is
+    /// accepted, with the fit's lower endpoint clamped to the domain boundary
+    /// zero (sound: the exact range lies within `[0, b]`, so the clamp cuts off
+    /// no value the form can take, and a fit over a superset of the exact range
+    /// encloses every image point). A multi-term form keeps the reduced-range
+    /// decision; the exact multi-term comparison needs an error-free summation
+    /// the directed-only [`RoundFloat`] contract cannot express. A form built
+    /// from a zero-touching interval such as `[0, b]` still declines, and
+    /// genuinely: its center sits strictly below its coefficient magnitude, so
+    /// the exact range itself dips below zero. Only an exact point `{0}` is
+    /// special-cased to the point `0`.
     ///
     /// `√x` is concave on the positive reals, so the residual `√x − α·x` has its
     /// minimum at an endpoint and its maximum `1/(4α)` at the interior tangent
@@ -202,9 +286,20 @@ impl<'id, F: RoundFloat> AffineForm<'id, F> {
     #[must_use]
     pub fn sqrt(&self, src: &mut SymbolSource<'id>) -> Option<Self> {
         let iv = self.reduce();
-        let (a, b) = (iv.inf(), iv.sup());
-        if !a.is_finite() || !b.is_finite() || a < F::ZERO {
+        let (mut a, b) = (iv.inf(), iv.sup());
+        if !a.is_finite() || !b.is_finite() {
             return None;
+        }
+        if a < F::ZERO {
+            // The outward-rounded reduced endpoint is out of domain, but a
+            // single-term form's exact infimum `x₀ − |x₁|` may not be, decided
+            // by the exact comparison. On acceptance the fit's lower endpoint
+            // clamps to the domain boundary zero: sound, because the exact
+            // range is a subset of `[0, b]`, so no input value is cut off.
+            match self.single_term_magnitude() {
+                Some(mag) if self.center() >= mag => a = F::ZERO,
+                _ => return None,
+            }
         }
         if b.is_zero() {
             // The range is {0}; √0 = 0, spending no symbol.
@@ -294,18 +389,36 @@ impl<'id, F: RoundFloat + RoundTranscendental> AffineForm<'id, F> {
 
     /// The natural logarithm `ln(x̂)`, by the Chebyshev affine approximation.
     ///
-    /// Returns `None` unless the whole range is in the domain (`a > 0`): a noise
-    /// symbol's range cannot be clamped to the positive part. `ln x` is concave,
-    /// so the residual `ln x − α·x` has its minimum at an endpoint and its maximum
-    /// `−(ln α + 1)` at the interior tangent point `1/α` (a sound upper bound over
-    /// the range). The secant slope is `(ln b − ln a)/(b − a)`. A range collapsed
-    /// to a point fits the constant `ln c`.
+    /// Returns `None` unless the whole range is in the domain (infimum `> 0`): a
+    /// noise symbol's range cannot be clamped to the positive part. For a form
+    /// with one deviation term the decision reads the exact range
+    /// `[x₀ − |x₁|, x₀ + |x₁|]`: the strict comparison `x₀ > |x₁|` rounds
+    /// nothing, so a form whose outward-rounded reduced endpoint grazes zero
+    /// while its exact infimum stays strictly positive is accepted, the fit
+    /// reading the sound directed lower bound of that infimum (and declining if
+    /// even the bound rounds out of the domain: soundness beats the last ulp of
+    /// tightening). A multi-term form keeps the reduced-range decision; the
+    /// exact multi-term comparison needs an error-free summation the
+    /// directed-only [`RoundFloat`] contract cannot express.
+    ///
+    /// `ln x` is concave, so the residual `ln x − α·x` has its minimum at an
+    /// endpoint and its maximum `−(ln α + 1)` at the interior tangent point
+    /// `1/α` (a sound upper bound over the range). The secant slope is
+    /// `(ln b − ln a)/(b − a)`. A range collapsed to a point fits the constant
+    /// `ln c`.
     #[must_use]
     pub fn ln(&self, src: &mut SymbolSource<'id>) -> Option<Self> {
         let iv = self.reduce();
-        let (a, b) = (iv.inf(), iv.sup());
-        if !a.is_finite() || !b.is_finite() || a <= F::ZERO {
+        let (mut a, b) = (iv.inf(), iv.sup());
+        if !a.is_finite() || !b.is_finite() {
             return None;
+        }
+        if a <= F::ZERO {
+            // The outward-rounded reduced endpoint is out of domain; a
+            // single-term form's exact infimum may still be strictly positive,
+            // decided exactly, with the fit reading its sound directed lower
+            // bound.
+            a = self.single_term_positive_inf()?;
         }
         let width = b.sub_down(a);
         if width <= F::ZERO {
