@@ -77,6 +77,26 @@ required-features = ["fixture"]
 name = "text_io_fixture"
 required-features = ["fixture"]
 
+[[test]]
+name = "reverse_abs_rev_fixture"
+required-features = ["fixture"]
+
+[[test]]
+name = "reverse_rev_fixture"
+required-features = ["fixture"]
+
+[[test]]
+name = "reverse_mul_rev_fixture"
+required-features = ["fixture"]
+
+[[test]]
+name = "reverse_pow_rev_fixture"
+required-features = ["fixture"]
+
+[[test]]
+name = "reverse_property"
+required-features = ["fixture"]
+
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"

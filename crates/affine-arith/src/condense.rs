@@ -57,7 +57,7 @@ impl<'id, F: RoundFloat> AffineForm<'id, F> {
     /// symbol). Otherwise the `budget − 1` terms of largest magnitude keep
     /// their symbols (ties broken toward the older symbol), and the rest are
     /// folded into a fresh symbol whose coefficient is their summed magnitude,
-    /// rounded up — sound by the argument in the [module docs](self). A
+    /// rounded up — sound by the argument in the module-level documentation. A
     /// `budget` of zero is treated as one: a nondegenerate form needs at least
     /// one term to carry its deviation.
     ///

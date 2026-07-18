@@ -206,9 +206,12 @@ fn sqr_straddling_zero_pins_the_nonnegative_image() {
 
 #[test]
 fn sqrt_of_a_zero_touching_range_declines() {
-    // from_interval([0, b]) rounds its reduced inf a hair below zero, so the whole
-    // reduced range is not in the domain and sqrt declines (the conservative
-    // choice; see the sqrt doc comment). Only an exact point {0} is special-cased.
+    // from_interval([0, b]) builds a form whose center sits strictly below its
+    // coefficient magnitude (the radius rounds the one-sided distance up), so
+    // the EXACT range dips below zero and sqrt declines, now through the
+    // single-term exact gate rather than the double-rounded reduced endpoint
+    // (see the sqrt doc comment and tests/elementary_domain_fixture.rs). Only
+    // an exact point {0} is special-cased.
     let is_none = with_source(|mut src| {
         let iv = Interval::new(0.0_f64, 4.0).unwrap();
         AffineForm::from_interval(&iv, &mut src)

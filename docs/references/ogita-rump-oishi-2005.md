@@ -17,9 +17,11 @@ consumers:
   - crates/round-float/docs/decisions/0002-tight-f64-backend.md (TwoSum and TwoProduct as the error-free transforms behind the directed adjust)
   - crates/round-float/src/tight_f64.rs (Law 2 TwoSum and Law 3 TwoProduct, the derived error-free transforms whose error sign drives the directed adjust)
   - docs/decisions/0008-reduction-operations-kulisch-accumulator.md (the deferred distillation alternative)
+  - crates/affine-arith/src/elementary.rs (the single-term exact domain gate; its doc records why the multi-term analogue, which needs the paper's summation, is blocked under the directed-only RoundFloat contract)
 verification:
   - crates/round-float/tests/tight_oracle.rs (the derived transforms certified against an independent integer reference oracle across the subnormal, binade, and overflow zones)
   - crates/round-float/tests/tight_adjacency_fixture.rs (adjacency and exactness of the directed bounds the transforms produce)
+  - crates/affine-arith/tests/elementary_domain_fixture.rs (a 2Sum derived from Algorithm 3.1 clamps sample points inside a single-term form's exact range, arbitrating the exact domain gate's acceptances)
 sha256: none
 notes: >-
   The standard modern citation for error-free transformations: TwoSum
