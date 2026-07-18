@@ -34,6 +34,13 @@ jobs:
       - uses: actions/checkout@v4
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - run: cargo test --workspace --all-features --locked
+      # The rustdoc link gate (enc-p49): cargo doc reuses the front-end
+      # compilation this job already performed, so the incremental cost is the
+      # link-resolution pass. Seven broken private intra-doc links accumulated
+      # unnoticed across a wave merge, four behind feature gates, so the
+      # --all-features form is load-bearing. A floor, not a substitute for
+      # review.
+      - run: RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --all-features --locked
 
   # The no_std cross-compile. Every crate builds for the embedded thumb targets
   # (listed in rust-toolchain.toml so rustup installs them), bare and with each
