@@ -5,9 +5,11 @@
 //! carries no directed-rounding arithmetic: noise-symbol freshness, the
 //! serialization validation of [`from_raw_parts`](crate::AffineForm::from_raw_parts),
 //! the shape invariant the addition merge must preserve, and the term-count
-//! logic of condensation. The symbolic variables are ids, counts, and budgets;
-//! coefficients are concrete, so CBMC never has to reason about the fixture's
-//! `next_up`/`next_down` bit manipulation.
+//! logic of condensation. The symbolic variables are ids and counts;
+//! coefficients are concrete, and the condensation budget is covered by an
+//! exhaustive concrete case split rather than a symbolic value (see the stop
+//! loss below), so CBMC never has to reason about the fixture's
+//! `next_up`/`next_down` bit manipulation over symbolic data.
 //!
 //! Run with `cargo kani -p affine-arith --features fixture`; gated on `fixture`
 //! for the `f64` instance of [`RoundFloat`](round_float::RoundFloat).
@@ -60,6 +62,48 @@
 //! the maximum term counts the inputs admit (`add` leaves at most
 //! `3 + 3 + 1 = 7` terms; the condensation form has three); a bound proving too
 //! costly in CI is the trigger to shrink.
+//!
+//! The stop loss has fired twice (2026-07-17, beads enc-otn and enc-9nq),
+//! both times for the same root cause in different clothes: a symbolic value
+//! that selects, indexes, or sizes concrete float data puts the floats
+//! themselves on the symbolic path, no matter how concrete the coefficients
+//! are.
+//!
+//! First firing (condensation): the harness drew its budget from `kani::any`,
+//! and the symbolic budget leaked into the float path through
+//! `keep = budget - 1`. That index chose the fold slice, the truncation
+//! length, and the length of the second sort, so the fixture's `add_up` ran
+//! over symbolically selected operands and the sort ran over a symbolic
+//! length, exactly the bit-blasting ADR-0003 found intractable. It never
+//! discharged: wave one's CI run was cancelled at the six-hour limit, a
+//! wave-four local run passed 150 CPU-minutes without finishing, and the
+//! wave-four merge push hung CI the same way. The intervention re-encoded the
+//! assumed budget domain (at most 4) as an exhaustive concrete case split
+//! over the five budgets, preserving the property verbatim; it now discharges
+//! in seconds.
+//!
+//! Second firing (the addition merge, found only after the first fix because
+//! package runs check the condensation harness first and its hang shadowed
+//! everything behind it): distinct concrete coefficients let the symbolic id
+//! interleaving choose which values met in `add_up`, so the adds ran over
+//! symbolically selected operands and passed ten minutes without
+//! discharging. Two levers were pulled: the coefficients were made uniform
+//! per operand, collapsing every selection to the same concrete pair while
+//! leaving the merge's discrete choices, the actual property under proof,
+//! fully symbolic; and the id bound was shrunk once from 64 to 8, which
+//! preserves every reachable interleaving (six distinct ids fit under 8 with
+//! every equality pattern) at half the bits per symbolic comparison. Neither
+//! sufficed, and the timing observations along the way were contaminated by
+//! CPU contention (an orphaned wave-four kani run and a concurrent gate from
+//! another project); the deciding evidence is contention-free. First, the
+//! solver's verdict exposed an unwind bound of 8 failing its own unwinding
+//! assertions on the seven-term result scan, a genuine harness defect latent
+//! since wave one. Second, with the bound corrected to 10 on an otherwise
+//! idle machine, CBMC exhausts memory in propositional reduction: the error
+//! accumulator threads the Equal branch, so symbolic interleavings feed an
+//! ite tree into chained fixture `add_up` calls, ADR-0003's intractable
+//! construct. The ladder exhausted, the harness was cut; the gap and the two
+//! routes back are recorded at its former site (group 3 below).
 
 use alloc::vec::Vec;
 
@@ -204,84 +248,46 @@ fn from_raw_parts_accepts_exactly_faithful_input() {
     }
 }
 
-// --- Group 3: the addition merge invariant ---
-
-/// `add` over operands with symbolic ids and concrete coefficients preserves the
-/// representation invariant, for every interleaving of the ids.
-#[kani::proof]
-#[kani::unwind(8)]
-fn add_preserves_the_merge_invariant() {
-    let na: u64 = kani::any();
-    let nb: u64 = kani::any();
-    kani::assume(na <= 3 && nb <= 3);
-
-    let ax0: u64 = kani::any();
-    let ax1: u64 = kani::any();
-    let ax2: u64 = kani::any();
-    let bx0: u64 = kani::any();
-    let bx1: u64 = kani::any();
-    let bx2: u64 = kani::any();
-
-    // Bound the ids so the source's error symbol can sit above them all, and
-    // assume each operand's ids strictly ascend (its representation invariant).
-    const BOUND: u64 = 64;
-    kani::assume(ax0 < BOUND && ax1 < BOUND && ax2 < BOUND);
-    kani::assume(bx0 < BOUND && bx1 < BOUND && bx2 < BOUND);
-    if na >= 2 {
-        kani::assume(ax0 < ax1);
-    }
-    if na == 3 {
-        kani::assume(ax1 < ax2);
-    }
-    if nb >= 2 {
-        kani::assume(bx0 < bx1);
-    }
-    if nb == 3 {
-        kani::assume(bx1 < bx2);
-    }
-
-    // Concrete coefficients keep the merge's float arithmetic out of the symbolic
-    // domain (ADR-0003). Every pairwise sum of the two coefficient sets is
-    // nonzero, so no shared-symbol coefficient cancels; the merge invariant holds
-    // without exercising the (fixture-unreachable) exact-zero drop path.
-    let a = operand(na, [ax0, ax1, ax2], [1.0, 2.0, 4.0]);
-    let b = operand(nb, [bx0, bx1, bx2], [1.0, -3.0, 5.0]);
-
-    // A source above every operand id: `add` always mints one error symbol (the
-    // fixture's `add_err(0, 0)` leaves subnormal dust), and placing it above the
-    // ids keeps the result strictly ascending.
-    let mut src = SymbolSource::unscoped_at(BOUND);
-    let sum = a.add(&b, &mut src);
-
-    kani::assert(
-        invariant_holds(sum.terms()),
-        "add leaves terms strictly ascending with no zero coefficient",
-    );
-
-    // Defend against vacuity: the shared-symbol (Equal) branch and a
-    // disjoint-symbol interleaving must both be reachable.
-    kani::cover!(
-        na >= 1 && nb >= 1 && ax0 == bx0,
-        "the shared-symbol merge branch is reachable"
-    );
-    kani::cover!(
-        na >= 1 && nb >= 1 && ax0 < bx0,
-        "a disjoint-symbol interleaving is reachable"
-    );
-}
+// --- Group 3: the addition merge invariant (cut; the gap and the route back) ---
+//
+// The harness `add_preserves_the_merge_invariant` proved that `add` over
+// operands with symbolic ids and concrete coefficients preserves the
+// representation invariant for every interleaving of the ids. It was cut on
+// 2026-07-18 (bead enc-9nq) after the stop-loss ladder ran out on clean
+// evidence: with uniform per-operand coefficients (so no symbolic selection
+// reaches `add_up`), the id bound shrunk 64 to 8, and the unwind bound
+// corrected 8 to 10 (the original failed its own unwinding assertions on the
+// seven-term result scan, latent since wave one), CBMC still exhausts memory
+// in propositional reduction on an otherwise idle machine. The residue is the
+// error accumulator: it threads the merge's Equal branch, so under symbolic
+// interleavings its value is an ite tree feeding chained fixture `add_up`
+// calls, ADR-0003's intractable construct at depth four.
+//
+// The gap: the merge-shape invariant over symbolic interleavings is not
+// machine-checked. It is exercised by the `ops` unit tests and the
+// composition property lane, and `from_raw_parts`'s validation harness above
+// still proves the invariant's decidable core. The recorded routes back,
+// either of which reopens this group: an exhaustive concrete enumeration of
+// the id order types (every merge behavior is fixed by the order type of the
+// two ascending tuples, so ascending tuples over a six-value universe cover
+// all of them with wholly concrete data and trivial unwind), or ADR-0003's
+// abstract-axiom backend, under which the fixture arithmetic itself turns
+// symbolic-but-axiomatized and this harness's original shape becomes viable.
 
 // --- Group 4: the condensation count logic ---
 
-/// Condensation bounds the term count by `max(budget, 1)`, returns a within-
-/// budget form unchanged spending no fresh symbol, and keeps its terms sorted.
-#[kani::proof]
-#[kani::unwind(8)]
-fn condense_bounds_terms_and_preserves_order() {
-    let budget: usize = kani::any();
-    kani::assume(budget <= 4);
-
-    // A fixed form of three ascending, distinct, nonzero concrete terms; only the
-    // budget is symbolic, so the fold arithmetic stays concrete (ADR-0003).
+/// The condensation property at one concrete budget: the term count is bounded
+/// by `max(budget, 1)`, a within-budget form is returned unchanged spending no
+/// fresh symbol, an over-budget form condenses to exactly the cap spending
+/// exactly one, and the result keeps its terms sorted.
+///
+/// The budget must be concrete: a symbolic budget flows through
+/// `keep = budget - 1` into the fold slice, the truncation, and the second
+/// sort, putting the fixture's `add_up` on the symbolic path (the blowup the
+/// module-level stop loss records).
+fn check_condense_at(budget: usize) {
+    // A fixed form of three ascending, distinct, nonzero concrete terms, so
+    // every fold the checker executes is over concrete data (ADR-0003).
     let terms: Vec<Term<f64>> = alloc::vec![
         Term::new(NoiseSymbol::from_raw(0), 3.0),
         Term::new(NoiseSymbol::from_raw(1), -2.0),
@@ -294,11 +300,6 @@ fn condense_bounds_terms_and_preserves_order() {
     let condensed = form.condense(budget, &mut src);
 
     let cap = if budget == 0 { 1 } else { budget };
-    kani::assert(
-        condensed.num_terms() <= cap,
-        "condensed term count is at most max(budget, 1)",
-    );
-
     if form.num_terms() <= cap {
         kani::assert(
             condensed.num_terms() == form.num_terms(),
@@ -308,18 +309,41 @@ fn condense_bounds_terms_and_preserves_order() {
             src.next_id() == before,
             "a within-budget form spends no fresh symbol",
         );
+    } else {
+        // The folded coefficient is a sum of strictly positive magnitudes
+        // rounded up, so the fresh term survives `push_fresh`'s zero drop and
+        // the count lands exactly on the cap.
+        kani::assert(
+            condensed.num_terms() == cap,
+            "an over-budget form condenses to exactly max(budget, 1) terms",
+        );
+        kani::assert(
+            src.next_id() == before + 1,
+            "the fold spends exactly one fresh symbol",
+        );
     }
 
     kani::assert(
         invariant_holds(condensed.terms()),
         "kept terms stay sorted with no zero coefficient",
     );
+}
 
-    // Defend against vacuity: both the over-budget fold and the within-budget
-    // identity branch must be reachable (the form has three terms).
-    kani::cover!(budget < 3, "the over-budget fold branch is reachable");
-    kani::cover!(
-        budget >= 3,
-        "the within-budget identity branch is reachable"
-    );
+/// Condensation bounds the term count by `max(budget, 1)`, returns a within-
+/// budget form unchanged spending no fresh symbol, and keeps its terms sorted;
+/// exhaustive over the budget domain the original harness assumed
+/// (`budget <= 4` against the fixed three-term form).
+///
+/// Budgets 0 through 2 take the over-budget fold and budgets 3 and 4 take the
+/// within-budget identity branch unconditionally, so both branches are
+/// exercised by construction and the vacuity covers of the symbolic encoding
+/// are no longer needed: there is no `assume` left to make any call vacuous.
+#[kani::proof]
+#[kani::unwind(8)]
+fn condense_bounds_terms_and_preserves_order() {
+    check_condense_at(0);
+    check_condense_at(1);
+    check_condense_at(2);
+    check_condense_at(3);
+    check_condense_at(4);
 }

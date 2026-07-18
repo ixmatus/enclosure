@@ -86,3 +86,31 @@ v1.0; before then the API may break between 0.x releases.
     pi-ambiguity decline), the structural collapse of `sin(x) − sin(x)`, and
     measures the `sin` fit decline rate (about `0.50` over widths uniform in
     `[0.1, 3]`, per decision record 0005 consequence (c)).
+
+### Fixed
+
+- The condensation Kani harness (`condense_bounds_terms_and_preserves_order`)
+  never discharged: its symbolic budget flowed through `keep = budget - 1` into
+  the fold slice, the truncation, and the re-sort, putting the fixture's
+  `add_up` and the sort's control flow on the symbolic path, the bit-blasting
+  interval-1788 ADR-0003 found intractable (150+ CPU-minutes locally, a
+  cancelled six-hour CI run). Re-encoded as an exhaustive concrete case split
+  over the assumed budget domain (`0..=4` against the fixed three-term form),
+  which preserves the property verbatim, strengthens the over-budget arm to
+  exact counts (exactly `max(budget, 1)` terms, exactly one fresh symbol), and
+  discharges in seconds. (Bead enc-otn.)
+- The addition-merge Kani harness (`add_preserves_the_merge_invariant`), never
+  observed either because package runs check the condensation harness first
+  and its hang shadowed everything behind it, was cut under the ADR-0006 stop
+  loss after the ladder ran out on clean evidence: it carried an unwind bound
+  latent-insufficient since wave one (8, failing its own unwinding assertions
+  on the seven-term result scan), and with the bound corrected, the
+  coefficients made uniform per operand, and the id bound shrunk 64 to 8,
+  CBMC still exhausts memory on the error accumulator's ite tree feeding
+  chained fixture `add_up` calls under symbolic interleavings. The merge
+  invariant stays with the unit tests and the composition property lane; the
+  recorded routes back are an exhaustive order-type enumeration or ADR-0003's
+  abstract-axiom backend. The module stop-loss note carries the full story
+  and the shared lesson: a symbolic value that selects, indexes, or sizes
+  concrete float data drags the floats onto the symbolic path.
+  (Bead enc-9nq, discovered from enc-otn.)
