@@ -38,6 +38,10 @@ consumers:
     atanh, exp2, exp10, log2, log10, pown vectors bare and decorated from
     libieeep1788_elem.itl; hex-float literals parsed in-test rather than
     pre-converted)
+  - crates/interval-1788/docs/decisions/0006-reverse-operations.md (the reverse
+    battery design; libieeep1788_rev.itl, libieeep1788_mul_rev.itl, abs_rev.itl,
+    and pow_rev.itl as its acceptance vectors, one fixture test file per itl
+    file in the implementing slice)
   - crates/interval-1788/tests/atan2_fixture.rs (the whole atan2.itl transcribed,
     plus the branch-cut and origin decoration cases from libieeep1788_elem.itl)
   - crates/interval-1788/tests/numeric_boolean_fixture.rs (mid, rad, midRad from
