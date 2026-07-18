@@ -64,11 +64,16 @@
 //! `atanh` behind [`RoundInverseHyperbolic`]; `exp2`, `exp10`, `log2`, `log10`
 //! behind [`RoundExpBases`]; and the integer power `pown` on bare
 //! [`RoundFloat`], `atan2` the first arm to earn the `def` decoration from a
-//! branch-cut crossing). Not yet present, and named rather than implied: reverse
-//! operations, the `mid`/`rad` numeric functions and the remaining ordering
-//! relations, Level 2 (text I/O, the datum model, and a nearest-float `mid` over
-//! a correctly-rounded backend), and conformance against the ITF1788 vector
-//! suite. The roadmap
+//! branch-cut crossing); and the reverse operations of [`reverse`] (the
+//! constraint-narrowing `sqr_rev`, `abs_rev`, `pown_rev`, `mul_rev`, and the
+//! two-output `mul_rev_to_pair` on bare [`RoundFloat`]; `sin_rev`, `cos_rev`,
+//! `tan_rev` behind [`RoundInverseTrig`]; `cosh_rev` behind
+//! [`RoundInverseHyperbolic`]; `pow_rev1`, `pow_rev2` behind
+//! [`RoundTranscendental`], every one decorated `trv`). Not yet present, and
+//! named rather than implied: the `mid`/`rad` numeric functions and the
+//! remaining ordering relations, Level 2 (text I/O, the datum model, and a
+//! nearest-float `mid` over a correctly-rounded backend), and conformance
+//! against the ITF1788 vector suite. The roadmap
 //! is the full set-based flavor; what is implemented at any version is stated
 //! per module.
 //!
@@ -95,6 +100,7 @@ pub mod interval;
 pub mod inverse;
 pub mod ops;
 pub mod point;
+pub mod reverse;
 pub mod spec;
 #[cfg(feature = "fixture")]
 pub mod text_io;
