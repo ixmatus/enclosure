@@ -210,7 +210,7 @@ use crate::{RoundFloat, RoundLargestFinite};
 /// [`RoundFloat`].
 ///
 /// The wrapped value is public so the newtype is transparent at the call site.
-/// See the [module docs](self) for the numbered laws every method honors.
+/// See the module-level documentation for the numbered laws every method honors.
 #[derive(Clone, Copy, PartialEq, PartialOrd, Debug)]
 pub struct TightF64(pub f64);
 

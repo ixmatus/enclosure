@@ -22,6 +22,9 @@
 //! would exceed it saturates to an overflowed endpoint rather than growing or
 //! panicking, so the no-panic and no-alloc guarantees hold for every input.
 //!
+//! The `Big` scratch buffer and the `directed_ratio` routine named below are
+//! private helpers of this module; the source carries their full documentation.
+//!
 //! # Placement: f64 specific, behind `fixture`
 //!
 //! Parsing a decimal or hex literal yields an EXACT real value (a rational or a
