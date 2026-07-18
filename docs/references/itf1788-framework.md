@@ -42,6 +42,26 @@ consumers:
     battery design; libieeep1788_rev.itl, libieeep1788_mul_rev.itl, abs_rev.itl,
     and pow_rev.itl as its acceptance vectors, one fixture test file per itl
     file in the implementing slice)
+  - crates/interval-1788/tests/reverse_rev_fixture.rs (sqrRev, absRev, pownRev,
+    sinRev, cosRev, tanRev, coshRev, mulRev, and the ternary mulRevTen from
+    libieeep1788_rev.itl, bare and decorated; structural cases exact, the
+    directed-root/division/inverse-image arms as the sound enclosure relationship)
+  - crates/interval-1788/tests/reverse_mul_rev_fixture.rs (the full 13x13 (b, c)
+    grid of mulRevToPair from libieeep1788_mul_rev.itl as a data table, plus the
+    decorated trv/NaI rule)
+  - crates/interval-1788/tests/reverse_abs_rev_fixture.rs (absRevBin from
+    abs_rev.itl, every case exact since the reverse absolute value never rounds)
+  - crates/interval-1788/tests/reverse_pow_rev_fixture.rs (powRev1 and powRev2
+    from pow_rev.itl. COVERAGE GAP: the crate computes both from the exp/ln of a
+    multiplication reverse, which is sound on every backend but not tight at two
+    corner families -- the 0/1/inf logarithm-boundary value-empties and the 0^0
+    /0^negative undefined base -- so the tests pinning the tight-empty result
+    there are #[ignore]d with a KNOWN GAP; exact conformance awaits the tight-f64
+    lane or a bespoke general-interval-power reverse. Soundness is discharged by
+    tests/reverse_property.rs against the forward pow battery)
+  - crates/interval-1788/tests/reverse_property.rs (the reverse-image soundness
+    lane: for every reverse, a forward-battery witness in the constraint must lie
+    in the reverse result; plus the mulRevToPair split invariants)
   - crates/interval-1788/tests/atan2_fixture.rs (the whole atan2.itl transcribed,
     plus the branch-cut and origin decoration cases from libieeep1788_elem.itl)
   - crates/interval-1788/tests/numeric_boolean_fixture.rs (mid, rad, midRad from

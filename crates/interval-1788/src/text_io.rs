@@ -18,7 +18,7 @@
 //! stay bounded is a named constant: [`MAX_INPUT_LEN`], [`MAX_SIG_DIGITS`],
 //! [`MAX_EXP_DIGITS`]. An input exceeding any of them is a [`TextError::TooLong`],
 //! which is the parser's answer to "an attacker sends a gigabyte of digits". The
-//! big-integer scratch is a fixed stack buffer ([`Big`]); a computation that
+//! big-integer scratch is a fixed stack buffer (`Big`); a computation that
 //! would exceed it saturates to an overflowed endpoint rather than growing or
 //! panicking, so the no-panic and no-alloc guarantees hold for every input.
 //!
@@ -52,7 +52,7 @@
 //! - hex-float `+-M x 2^k`: `num = M << max(0,k)`, `den = 1 << max(0,-k)`;
 //! - rational `+-p/q`: `num = |p|`, `den = |q|`.
 //!
-//! [`directed_ratio`] rounds `+-num/den` to the directed `f64` by exact integer
+//! `directed_ratio` rounds `+-num/den` to the directed `f64` by exact integer
 //! long division: it normalizes `num/den` to a 53-bit significand and a binary
 //! exponent, takes the quotient's top bits with an exact nonzero-remainder flag,
 //! and rounds down (truncate) or up (truncate then add one when the remainder is

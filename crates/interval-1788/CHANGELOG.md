@@ -8,6 +8,51 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Added
 
+- The reverse operations on `Interval<F>` and `DecoratedInterval<F>`, in a new
+  `reverse` module, each in its explicit-candidate form
+  (`f_rev(c, x) = hull({ t in x : f(t) in c })`, the standard's candidate-less
+  form recovered at `x = entire`): `sqr_rev`, `abs_rev`, `pown_rev`, `mul_rev`,
+  and the two-output `mul_rev_to_pair` over bare `RoundFloat`; `sin_rev`,
+  `cos_rev`, `tan_rev` behind `F: RoundInverseTrig`; `cosh_rev` behind
+  `F: RoundInverseHyperbolic`; and `pow_rev1`, `pow_rev2` behind
+  `F: RoundTranscendental`. The arithmetic reverses are the tightest
+  representable result over any `RoundFloat` from directed arithmetic: the square
+  and integer roots come from a two-phase value-domain bisection over the
+  directed `pown` chain (geometric probes by directed `sqrt` while the bracket is
+  wide, arithmetic probes once it is narrow, a multiplicative straddle refinement
+  at the exit; never `RoundPow`, so the arm is exact on backends that lack it),
+  and `mul_rev`/`mul_rev_to_pair` from the zero-straddle case table of the
+  two-output division, with `mul_rev` the hull of the pair's two pieces each
+  intersected with the candidate. The periodic reverses enumerate exactly the
+  preimage arcs that can meet the candidate, wherever it sits: arc placement is
+  by sound interval sums of doubled period-enclosure blocks (a galloping landing
+  and a one-period walk, so no float arc counter can drift off the integers),
+  degrading to the candidate-clipped maximal preimage when the window spans more
+  than `TRIG_REV_ARC_CAP` periods or the accumulated pi-enclosure uncertainty
+  smears adjacent arcs (half a period of position-enclosure width, near `10^15`
+  periods over the fixture; a tightness loss, never a soundness loss). The power
+  reverses are computed from the exponential and logarithm of a multiplication
+  reverse. Every decorated reverse grades `trv` (a reverse image carries no
+  definedness or continuity witness), with `ill` propagating. Decision record
+  0006.
+
+- Test lanes `tests/reverse_rev_fixture.rs`, `tests/reverse_mul_rev_fixture.rs`,
+  and `tests/reverse_abs_rev_fixture.rs` transcribe the ITF1788
+  `libieeep1788_rev.itl`, `libieeep1788_mul_rev.itl`, and `abs_rev.itl` vectors
+  (the full `mulRevToPair` grid as a data table); structural cases assert exactly
+  and the directed-root, division, and inverse-image arms assert the sound
+  enclosure relationship on the loose fixture. `tests/reverse_property.rs` is the
+  independent reverse-image soundness lane, arbitrated only through the forward
+  battery: a witness whose forward image lands in the constraint must lie in the
+  reverse result, and the `mul_rev_to_pair` split invariants (disjoint, ordered
+  pieces; `mul_rev` equals the hull of the pair intersected with the candidate)
+  hold. `tests/reverse_pow_rev_fixture.rs` transcribes `pow_rev.itl`, with two
+  `#[ignore]`d KNOWN GAPs: the exp/ln reduction is sound but not tight at the
+  0/1/inf logarithm-boundary value-empties and the `0^0`/`0^negative` undefined
+  base, where a tight-empty result comes back as a sound superset; exact
+  conformance there awaits the tight-`f64` lane or a bespoke general-interval
+  power reverse. Soundness at those corners is discharged by the property lane.
+
 - The elementary battery round two on `Interval<F>` and `DecoratedInterval<F>`,
   in a new `inverse` module: `asin`, `acos`, `atan`, `atan2` (behind
   `F: RoundInverseTrig`), `asinh`, `acosh`, `atanh` (behind
