@@ -8,6 +8,46 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Added
 
+- The conformance vector lane (bead enc-ac4), split by backend. Over the
+  correctly rounded `TightF64` (a dev-dependency; the shipped surface is
+  untouched): the `libieeep1788_elem.itl` arithmetic testcases, all 1373
+  vectors bit-exact (`tests/conformance_arith_tight.rs`), and the arithmetic
+  reverse testcases of `libieeep1788_rev.itl`, `libieeep1788_mul_rev.itl`,
+  and `abs_rev.itl`, all 995 vectors bit-exact
+  (`tests/conformance_reverse_tight.rs`); the trigonometric and hyperbolic
+  reverses stay with the fixture enclosure lanes, which `TightF64`'s trait
+  set cannot fund. Over the f64 fixture: `libieeep1788_bool.itl` completed to
+  full coverage (the prior ordering transcriptions were sampled), the
+  `inf`/`sup`/`wid`/`mag`/`mig` numerics, all of `libieeep1788_rec_bool.itl`
+  and `libieeep1788_set.itl`, the `libieeep1788_class.itl` decorated
+  constructors (`newDec`, `intervalPart`, `decorationPart`, `setDec`), and
+  the `exp`/`log` elementary vectors in a new enclosure-idiom
+  `tests/exp_log_fixture.rs`. The LGPL vector sets (`mpfi.itl`,
+  `fi_lib.itl`) and the license-unstated `c-xsc.itl` are deliberately not
+  transcribed; the exclusion and its license rationale are recorded in the
+  reference registry.
+
+### Known issues, surfaced by the lane and tracked as beads
+
+- Interval division is `a * recip(b)`, one rounding looser than the tightest
+  quotient on 56 vectors (enc-ghz); `pown`'s repeated squaring is loose for
+  exponent magnitude three and above, and its negative-power overflow path
+  collapses near the subnormal edge, 41 vectors (enc-5jj, falsifying the
+  workspace decision record 0007's assumption that the corpus could not
+  distinguish chain tightness). `pown_rev`'s root bisection leaves one-to-
+  three-ulp brackets for exponent magnitude three and above, 44 vectors
+  (enc-cov, an erratum owed to decision record 0006 part 3), and its
+  negative-exponent path saturates the set-level reciprocal at the subnormal
+  edge, 8 vectors (enc-ral). `set_dec` returns NaI where the standard's
+  `setDec` clamps, 6 vectors (enc-2hd). The draft-era corpus propagates
+  decorations through the two-output division where decision record 0006
+  part 5 grades `trv`, 175 decoration-only divergences pending a
+  final-standard reading (enc-pzd). The decorated conformance surface lacks
+  numeric accessors, unary predicates, set operations, and
+  `isCommonInterval`/`isMember` (enc-ks9). Every non-tight result above is a
+  verified sound enclosure; the lane found no soundness violation anywhere
+  in the corpus.
+
 - The reverse operations on `Interval<F>` and `DecoratedInterval<F>`, in a new
   `reverse` module, each in its explicit-candidate form
   (`f_rev(c, x) = hull({ t in x : f(t) in c })`, the standard's candidate-less
