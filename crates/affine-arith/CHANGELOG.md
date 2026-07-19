@@ -89,6 +89,19 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Fixed
 
+- The `from_raw_parts` Kani harness put the CI runner at its memory cliff
+  (about 15 million SAT variables for a thirty-line function; the wave-5b
+  merge run died by runner OOM mid-solve). Two property-preserving
+  simplifications landed, a float class split over the `is_finite`/`is_zero`
+  quotient the function actually reads and an id bound of 8 covering every
+  order pattern, and left the formula essentially unchanged: the footprint is
+  the bit-blasted `Vec` and allocator machinery, not the symbolic inputs. The
+  harness stays in the tree as a locally verified proof (about three minutes
+  per discharge) and is temporarily absent from the CI harness list, with
+  notices in the workflow, the module doc, and bead enc-tgw; the CI badge
+  does not attest it until the footprint is understood or the runner grows.
+
+
 - The condensation Kani harness (`condense_bounds_terms_and_preserves_order`)
   never discharged: its symbolic budget flowed through `keep = budget - 1` into
   the fold slice, the truncation, and the re-sort, putting the fixture's
