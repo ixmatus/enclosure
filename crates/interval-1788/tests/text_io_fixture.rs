@@ -18,6 +18,28 @@
 //! path (both must land on the same `f64`). The directed decimal core is
 //! validated independently against the correctly-rounded `str::parse` oracle, and
 //! the hex path against the exact round-trip, in the property lanes below.
+//!
+//! # The `libieeep1788_class.itl` decorated-constructor testcases
+//!
+//! Beyond `numsToInterval`/`textToInterval`, this file transcribes the class
+//! file's decorated-interval constructors and accessors: `newDec`,
+//! `intervalPart` (the crate's `interval()`), `decorationPart` (the crate's
+//! `decoration()`), and `setDec`. An input interval is parsed through the crate
+//! (so hex endpoints stay exact) and the operation is applied directly; the
+//! decoration is asserted exactly, since these constructors never round.
+//!
+//! `intervalPart([nai])` is expected `[empty]` here: the standard raises an
+//! information-loss `IntvlPartOfNaI` signal that the crate does not (the same
+//! value-versus-signal divergence the `UndefinedOperation` cases carry).
+//!
+//! `setDec` has a REQUIRED-OPERATION divergence the conformance lane surfaces:
+//! the standard's `setDec` CLAMPS an inconsistent (interval, decoration) pair
+//! (an empty interval forces `trv`, an unbounded interval demotes `com` to
+//! `dac`), whereas the crate's `set_dec` returns `NaI` for any inconsistent
+//! combination. The 16 consistent vectors pass; the 6 clamping vectors are a
+//! documented `KNOWN GAP` (`set_dec_clamping_divergence_known_gap`, `#[ignore]`d),
+//! asserting the standard datum so the test goes green if the divergence is ever
+//! resolved. No library fix lands in this slice.
 
 use interval_1788::text_io::{TextError, MAX_EXP_DIGITS, MAX_INPUT_LEN, MAX_SIG_DIGITS};
 use interval_1788::{DecoratedInterval, Decoration, Interval};
@@ -66,6 +88,7 @@ fn bad_d(input: &str) {
 
 #[test]
 fn nums_to_interval_bare() {
+    // minimal_nums_to_interval_test: 8 vectors (plus one exceptions.itl row)
     let ni = |l, u| Interval::<f64>::nums_to_interval(l, u);
     assert_eq!(ni(-1.0, 1.0), Interval::new(-1.0, 1.0));
     assert_eq!(
@@ -85,6 +108,7 @@ fn nums_to_interval_bare() {
 
 #[test]
 fn nums_to_interval_decorated() {
+    // minimal_nums_to_decorated_interval_test: 8 vectors
     let dc = |l, u| {
         DecoratedInterval::<f64>::nums_to_interval(l, u)
             .unwrap()
@@ -97,6 +121,245 @@ fn nums_to_interval_decorated() {
     // signal UndefinedOperation -> Err (in place of a returned NaI).
     assert!(DecoratedInterval::<f64>::nums_to_interval(f64::NAN, f64::NAN).is_err());
     assert!(DecoratedInterval::<f64>::nums_to_interval(1.0, -1.0).is_err());
+    assert!(
+        DecoratedInterval::<f64>::nums_to_interval(f64::NEG_INFINITY, f64::NEG_INFINITY).is_err()
+    );
+    assert!(DecoratedInterval::<f64>::nums_to_interval(f64::INFINITY, f64::INFINITY).is_err());
+}
+
+// --- class: newDec / intervalPart / decorationPart / setDec ----------------
+//
+// The decorated-interval constructors and accessors of libieeep1788_class.itl.
+// An input interval is parsed through the crate (hex endpoints stay exact) and
+// the operation applied directly; decorations are pinned exactly.
+
+#[test]
+fn new_dec_vectors() {
+    // minimal_new_dec_test: 13 vectors
+    let com = |s: &str| {
+        let d = DecoratedInterval::new_dec(p(s));
+        assert_eq!(d.interval(), p(s), "newDec interval part for {s}");
+        assert_eq!(d.decoration(), Decoration::Com, "newDec decoration for {s}");
+    };
+    com("[-0x1.99999A842549Ap+4,0X1.9999999999999P-4]");
+    com("[-0X1.99999C0000000p+4,0X1.9999999999999P-4]");
+    com("[-0x1.99999A842549Ap+4,0x1.99999A0000000p-4]");
+    com("[-0X1.99999C0000000p+4,0x1.99999A0000000p-4]");
+    com("[-0x0.0000000000001p-1022,-0x0.0000000000001p-1022]");
+    com("[-0x0.0000000000001p-1022,0x0.0000000000001p-1022]");
+    com("[0x0.0000000000001p-1022,0x0.0000000000001p-1022]");
+    com("[-0x1.fffffffffffffp+1023,-0x1.fffffffffffffp+1023]");
+    com("[-0x1.fffffffffffffp+1023,0x1.fffffffffffffp+1023]");
+    com("[0x1.fffffffffffffp+1023,0x1.fffffffffffffp+1023]");
+    // Unbounded nonempty earns dac; empty earns trv.
+    let entire = DecoratedInterval::new_dec(Interval::<f64>::entire());
+    assert!(entire.interval().is_entire());
+    assert_eq!(entire.decoration(), Decoration::Dac);
+    let empty = DecoratedInterval::new_dec(Interval::<f64>::empty());
+    assert!(empty.interval().is_empty());
+    assert_eq!(empty.decoration(), Decoration::Trv);
+    com("[-0X1.99999C0000000p+4,0X1.9999999999999P-4]");
+}
+
+#[test]
+fn interval_part_vectors() {
+    // minimal_interval_part_test: 14 vectors. intervalPart = interval(). Built
+    // via set_dec with the corpus decoration (all consistent here), so interval()
+    // returns the parsed interval unchanged.
+    let ip = |s: &str, d: Decoration| {
+        assert_eq!(
+            DecoratedInterval::set_dec(p(s), d).interval(),
+            p(s),
+            "intervalPart {s}"
+        );
+    };
+    ip(
+        "[-0x1.99999A842549Ap+4,0X1.9999999999999P-4]",
+        Decoration::Trv,
+    );
+    ip(
+        "[-0X1.99999C0000000p+4,0X1.9999999999999P-4]",
+        Decoration::Com,
+    );
+    ip(
+        "[-0x1.99999A842549Ap+4,0x1.99999A0000000p-4]",
+        Decoration::Dac,
+    );
+    ip(
+        "[-0X1.99999C0000000p+4,0x1.99999A0000000p-4]",
+        Decoration::Def,
+    );
+    ip(
+        "[-0x0.0000000000001p-1022,-0x0.0000000000001p-1022]",
+        Decoration::Trv,
+    );
+    ip(
+        "[-0x0.0000000000001p-1022,0x0.0000000000001p-1022]",
+        Decoration::Trv,
+    );
+    ip(
+        "[0x0.0000000000001p-1022,0x0.0000000000001p-1022]",
+        Decoration::Trv,
+    );
+    ip(
+        "[-0x1.fffffffffffffp+1023,-0x1.fffffffffffffp+1023]",
+        Decoration::Trv,
+    );
+    ip(
+        "[-0x1.fffffffffffffp+1023,0x1.fffffffffffffp+1023]",
+        Decoration::Trv,
+    );
+    ip(
+        "[0x1.fffffffffffffp+1023,0x1.fffffffffffffp+1023]",
+        Decoration::Trv,
+    );
+    assert!(
+        DecoratedInterval::set_dec(Interval::<f64>::entire(), Decoration::Trv)
+            .interval()
+            .is_entire()
+    );
+    assert!(
+        DecoratedInterval::set_dec(Interval::<f64>::empty(), Decoration::Trv)
+            .interval()
+            .is_empty()
+    );
+    ip(
+        "[-0X1.99999C0000000p+4,0X1.9999999999999P-4]",
+        Decoration::Com,
+    );
+    // intervalPart[nai] = [empty]; the IntvlPartOfNaI signal is not raised.
+    assert!(DecoratedInterval::<f64>::nai().interval().is_empty());
+}
+
+#[test]
+fn decoration_part_vectors() {
+    // minimal_decoration_part_test: 6 vectors. decorationPart = decoration().
+    assert_eq!(
+        DecoratedInterval::<f64>::nai().decoration(),
+        Decoration::Ill
+    );
+    assert_eq!(
+        DecoratedInterval::set_dec(Interval::<f64>::empty(), Decoration::Trv).decoration(),
+        Decoration::Trv
+    );
+    assert_eq!(
+        DecoratedInterval::set_dec(p("[-1.0,3.0]"), Decoration::Trv).decoration(),
+        Decoration::Trv
+    );
+    assert_eq!(
+        DecoratedInterval::set_dec(p("[-1.0,3.0]"), Decoration::Def).decoration(),
+        Decoration::Def
+    );
+    assert_eq!(
+        DecoratedInterval::set_dec(p("[-1.0,3.0]"), Decoration::Dac).decoration(),
+        Decoration::Dac
+    );
+    assert_eq!(
+        DecoratedInterval::set_dec(p("[-1.0,3.0]"), Decoration::Com).decoration(),
+        Decoration::Com
+    );
+}
+
+#[test]
+fn set_dec_vectors() {
+    // minimal_set_dec_test: 16 of 22 vectors (the 6 clamping vectors are a
+    // documented KNOWN GAP; see set_dec_clamping_divergence_known_gap).
+    let ok = |s: &str, d: Decoration, want: Decoration| {
+        let r = DecoratedInterval::set_dec(p(s), d);
+        assert!(!r.is_nai(), "setDec {s} {d:?} unexpectedly NaI");
+        assert_eq!(r.interval(), p(s), "setDec {s} interval part");
+        assert_eq!(r.decoration(), want, "setDec {s} decoration");
+    };
+    ok(
+        "[-0x1.99999A842549Ap+4,0X1.9999999999999P-4]",
+        Decoration::Trv,
+        Decoration::Trv,
+    );
+    ok(
+        "[-0X1.99999C0000000p+4,0X1.9999999999999P-4]",
+        Decoration::Com,
+        Decoration::Com,
+    );
+    ok(
+        "[-0x1.99999A842549Ap+4,0x1.99999A0000000p-4]",
+        Decoration::Dac,
+        Decoration::Dac,
+    );
+    ok(
+        "[-0X1.99999C0000000p+4,0x1.99999A0000000p-4]",
+        Decoration::Def,
+        Decoration::Def,
+    );
+    ok(
+        "[-0x0.0000000000001p-1022,-0x0.0000000000001p-1022]",
+        Decoration::Trv,
+        Decoration::Trv,
+    );
+    ok(
+        "[-0x0.0000000000001p-1022,0x0.0000000000001p-1022]",
+        Decoration::Def,
+        Decoration::Def,
+    );
+    ok(
+        "[0x0.0000000000001p-1022,0x0.0000000000001p-1022]",
+        Decoration::Dac,
+        Decoration::Dac,
+    );
+    ok(
+        "[-0x1.fffffffffffffp+1023,-0x1.fffffffffffffp+1023]",
+        Decoration::Com,
+        Decoration::Com,
+    );
+    ok(
+        "[-0x1.fffffffffffffp+1023,0x1.fffffffffffffp+1023]",
+        Decoration::Def,
+        Decoration::Def,
+    );
+    ok(
+        "[0x1.fffffffffffffp+1023,0x1.fffffffffffffp+1023]",
+        Decoration::Trv,
+        Decoration::Trv,
+    );
+    let e = DecoratedInterval::set_dec(Interval::<f64>::entire(), Decoration::Dac);
+    assert!(e.interval().is_entire());
+    assert_eq!(e.decoration(), Decoration::Dac);
+    let em = DecoratedInterval::set_dec(Interval::<f64>::empty(), Decoration::Trv);
+    assert!(em.interval().is_empty());
+    assert_eq!(em.decoration(), Decoration::Trv);
+    ok(
+        "[-0X1.99999C0000000p+4,0X1.9999999999999P-4]",
+        Decoration::Com,
+        Decoration::Com,
+    );
+    // setDec X ill = [nai]: the crate returns NaI (value matches; the
+    // UndefinedOperation signal is not raised).
+    assert!(DecoratedInterval::set_dec(Interval::<f64>::empty(), Decoration::Ill).is_nai());
+    assert!(DecoratedInterval::set_dec(p("[-inf,3.0]"), Decoration::Ill).is_nai());
+    assert!(DecoratedInterval::set_dec(p("[-1.0,3.0]"), Decoration::Ill).is_nai());
+}
+
+#[test]
+#[ignore = "KNOWN GAP: set_dec returns NaI for inconsistent combos; the standard's setDec clamps"]
+fn set_dec_clamping_divergence_known_gap() {
+    // minimal_set_dec_test, the 6 clamping vectors. The standard's setDec forces
+    // an empty interval to trv and demotes com to dac on an unbounded interval,
+    // returning a valid decorated interval; the crate's set_dec instead returns
+    // NaI. These assertions hold the STANDARD datum, so the test goes green if the
+    // divergence is ever resolved; today the `!is_nai()` assertions fail, hence
+    // #[ignore]. No library fix lands in this slice. Never adjust expected values.
+    let clamp = |x: Interval<f64>, d: Decoration, want: Decoration| {
+        let r = DecoratedInterval::set_dec(x, d);
+        assert!(!r.is_nai());
+        assert_eq!(r.decoration(), want);
+    };
+    // setDec [empty] {def,dac,com} = [empty]_trv
+    clamp(Interval::empty(), Decoration::Def, Decoration::Trv);
+    clamp(Interval::empty(), Decoration::Dac, Decoration::Trv);
+    clamp(Interval::empty(), Decoration::Com, Decoration::Trv);
+    // setDec [unbounded] com = [unbounded]_dac
+    clamp(p("[1.0,+inf]"), Decoration::Com, Decoration::Dac);
+    clamp(p("[-inf,3.0]"), Decoration::Com, Decoration::Dac);
+    clamp(Interval::entire(), Decoration::Com, Decoration::Dac);
 }
 
 // --- exact anchors against plain f64 literals (independent ground truth) ----

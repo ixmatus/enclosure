@@ -62,6 +62,10 @@ name = "elementary_fixture"
 required-features = ["fixture"]
 
 [[test]]
+name = "exp_log_fixture"
+required-features = ["fixture"]
+
+[[test]]
 name = "point_functions_fixture"
 required-features = ["fixture"]
 
