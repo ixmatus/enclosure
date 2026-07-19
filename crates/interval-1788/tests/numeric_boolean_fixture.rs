@@ -8,9 +8,17 @@
 //!
 //! The unit tests hand-translate the vendored ITF1788 conformance vectors
 //! (`libieeep1788_num.itl`, `libieeep1788_bool.itl`, `libieeep1788_overlap.itl`,
-//! `libieeep1788_rec_bool.itl`, `libieeep1788_set.itl`), one `#[test]` fn per
-//! testcase with a `// <testcase>: N vectors` count comment, every assertion line
-//! present (no sampling).
+//! `libieeep1788_rec_bool.itl`, `libieeep1788_set.itl`). Every transcribed
+//! testcase is complete: every assertion statement present, none sampled, with a
+//! `// <testcase>: N vectors` count comment. Most testcases are one `#[test]` fn;
+//! the deliberate exceptions are `minimal_overlap_test` (48 vectors split
+//! across the empty/forward/reverse fns, 3 + 26 + 19, each fn stating its share)
+//! and the `mid`/`rad`/`midRad` bare testcases (each split into a live fn of the
+//! vectors this fixture reproduces bit-exactly and an `#[ignore]`d KNOWN GAP twin
+//! holding the corpus datum for the rest; the count comments state the split).
+//! The four `mid_rad_*` fns above the 1:1 lane are curated-supplementary (a
+//! seven-interval property lane predating the corpus transcription), not corpus
+//! tiling.
 //!
 //! # What is exact, what is sound-not-tight
 //!
@@ -27,20 +35,26 @@
 //! - the orderings, `overlap`, `subset`, `interior`, `disjoint`, `isEmpty`,
 //!   `isEntire`, `isNaI`, `isSingleton`, `intersection`, and `convexHull` are
 //!   exact set/endpoint logic: pinned exactly, empty tables included.
-//! - `mid`/`rad` keep their earlier treatment (exact where the Level 2 datum is
-//!   exact on a sound backend; enclosure property elsewhere; see `mid_rad`).
+//! - `mid`/`rad`/`midRad` are transcribed 1:1 with exact assertions. The
+//!   structural, singleton, symmetric, and half-unbounded vectors pass on this
+//!   fixture; the general bounded vectors cannot (directed halving lands the mid
+//!   ulps wide, `sub_up` over-estimates every finite nonzero radius), so those
+//!   hold the corpus datum in `#[ignore]`d KNOWN GAP fns that go green on a
+//!   tight backend. Soundness of the loose values is covered by the curated fns
+//!   and the property lanes.
 //!
 //! # Required-operation gaps (see the `KNOWN GAP` block below)
 //!
 //! Several corpus testcases exercise operations the crate does not surface. Their
 //! bare siblings are covered; the decorated or recommended forms are reported,
 //! not faked. The crate deliberately factors decoration handling: the boolean and
-//! relational operations have decorated forms, but the numeric accessors, the
-//! unary predicates, and the set operations do not, so a decorated numeric or set
-//! result is reached through `interval()` at the boundary. The `_dec` predicate
-//! twins are transcribed through `is_nai()` + `interval()` (the crate's own
-//! boundary idiom, which reproduces the corpus including the `NaI` rule); the
-//! decorated numeric and set families are left as documented gaps.
+//! relational operations have decorated forms (transcribed 1:1 above), and
+//! `isNaI_dec` is transcribed 1:1 against `is_nai()`, but the numeric accessors,
+//! the remaining unary predicates, and the set operations have no decorated
+//! forms, so those `_dec` testcases (and the recommended `isCommonInterval` /
+//! `isMember`, whose bare intents are covered by documented compositions over
+//! `is_bounded` / `contains`) are recorded as gaps with their corpus counts, not
+//! transcribed.
 //!
 //! The property lanes add: (a) the defining `mid`/`rad` enclosure property over
 //! random bounded intervals; (b) `mid` inside the interval and `rad` nonnegative;
@@ -149,8 +163,9 @@ fn assert_encloses(x: Interval<f64>) {
 
 #[test]
 fn mid_rad_empty_is_none() {
-    // minimal_mid_test / minimal_rad_test / minimal_mid_rad_test: empty -> NaN,
-    // which the Option surface renders as None.
+    // Curated-supplementary (the 1:1 corpus transcription is in the
+    // `*_bare_vectors` fns below): empty -> NaN, which the Option surface
+    // renders as None.
     let e = Interval::<f64>::empty();
     assert_eq!(e.mid(), None);
     assert_eq!(e.rad(), None);
@@ -159,6 +174,7 @@ fn mid_rad_empty_is_none() {
 
 #[test]
 fn mid_rad_exact_pinned_cases() {
+    // Curated-supplementary (see the 1:1 `*_bare_vectors` fns below).
     // The cases the directed-ops derivation guarantees exactly on the fixture.
     // Entire centers at zero with an infinite radius.
     assert_eq!(Interval::<f64>::entire().mid(), Some(0.0));
@@ -177,8 +193,10 @@ fn mid_rad_exact_pinned_cases() {
 
 #[test]
 fn mid_rad_general_bounded_encloses() {
-    // minimal_*_test bounded cases. The fixture cannot reproduce the exact
-    // midpoint through directed halving, so the enclosure property is the claim.
+    // Curated-supplementary bounded cases (a seven-interval property lane, not
+    // the corpus; the 1:1 transcription is in the `*_bare_vectors` fns below).
+    // The fixture cannot reproduce the exact midpoint through directed halving,
+    // so the enclosure property is the claim.
     // The large case also exercises the overflow-safe halved form: (a + b) would
     // overflow to +inf, the halved a/2 + b/2 does not.
     for x in [
@@ -200,6 +218,7 @@ fn mid_rad_general_bounded_encloses() {
 
 #[test]
 fn mid_rad_half_unbounded() {
+    // Curated-supplementary (see the 1:1 `*_bare_vectors` fns below).
     // minimal_mid_test pins realmax / -realmax here, now reachable bit-exact
     // through the largest-finite capability: `mid([a, +inf]) = +MAX` and
     // `mid([-inf, b]) = -MAX`, radius +inf. These two vectors were previously
@@ -227,6 +246,159 @@ fn mid_rad_half_unbounded() {
         assert_eq!(rad, INF, "an unbounded interval has an infinite radius");
         assert!(x.contains(mid), "midpoint must lie inside the interval");
     }
+}
+
+// --- Numeric: mid / rad / midRad, the 1:1 corpus transcription -------------
+//
+// Every vector of minimal_mid_test, minimal_rad_test, and minimal_mid_rad_test,
+// exact against the corpus datum. The vectors the sound-not-tight fixture cannot
+// reproduce bit-exactly (its directed ops step outward even on representable
+// results, so a general bounded midpoint lands ulps wide and a radius is always
+// an over-estimate) are split into `#[ignore]`d KNOWN GAP twins holding the
+// corpus datum, so each goes green the day a tight backend (or a tighter fixture)
+// runs this lane. Soundness of the loose values (mid within the interval; the
+// enclosure property; rad never under-estimated) is covered by the curated fns
+// and property lanes above. Never adjust expected values.
+
+#[test]
+fn mid_bare_vectors() {
+    // minimal_mid_test: 7 of 12 vectors exact on this fixture (the remaining 5
+    // are in mid_bare_vectors_fixture_loose_known_gap; 7 + 5 = 12).
+    assert_eq!(Interval::<f64>::empty().mid(), None); // corpus NaN -> None
+    assert_eq!(Interval::<f64>::entire().mid(), Some(0.0));
+    assert_eq!(iv(-MAX, MAX).mid(), Some(0.0)); // [-0x1.FFFFFFFFFFFFFp1023, +same]
+    assert_eq!(iv(2.0, 2.0).mid(), Some(2.0));
+    assert_eq!(iv(-2.0, 2.0).mid(), Some(0.0));
+    assert_eq!(iv(0.0, INF).mid(), Some(hx("0x1.FFFFFFFFFFFFFp1023")));
+    assert_eq!(iv(NEG_INF, 1.2).mid(), Some(hx("-0x1.FFFFFFFFFFFFFp1023")));
+}
+
+#[test]
+#[ignore = "KNOWN GAP: fixture looseness; general-bounded mid is ulps wide of the tight Level 2 datum"]
+fn mid_bare_vectors_fixture_loose_known_gap() {
+    // minimal_mid_test: the 5 general-bounded vectors (of 12) the fixture's
+    // directed halving cannot pin. Measured fixture values (all members of the
+    // interval, enclosure preserved): mid([0,2]) = 1 - 4 ulps; the two
+    // mixed-subnormal mids land one endpoint inward instead of zero; the realmax
+    // shoulder lands 3 ulps low; the pure-subnormal mid lands one ulp low.
+    // Corpus datum held below; goes green on a tight backend.
+    assert_eq!(iv(0.0, 2.0).mid(), Some(1.0));
+    assert_eq!(
+        iv(
+            hx("-0X0.0000000000002P-1022"),
+            hx("0X0.0000000000001P-1022")
+        )
+        .mid(),
+        Some(0.0)
+    );
+    assert_eq!(
+        iv(
+            hx("-0X0.0000000000001P-1022"),
+            hx("0X0.0000000000002P-1022")
+        )
+        .mid(),
+        Some(0.0)
+    );
+    assert_eq!(
+        iv(hx("0X1.FFFFFFFFFFFFFP+1022"), hx("0X1.FFFFFFFFFFFFFP+1023")).mid(),
+        Some(hx("0X1.7FFFFFFFFFFFFP+1023"))
+    );
+    assert_eq!(
+        iv(hx("0X0.0000000000001P-1022"), hx("0X0.0000000000003P-1022")).mid(),
+        Some(hx("0X0.0000000000002P-1022"))
+    );
+}
+
+#[test]
+fn rad_bare_vectors() {
+    // minimal_rad_test: 5 of 9 vectors exact on this fixture (the remaining 4
+    // are in rad_bare_vectors_fixture_loose_known_gap; 5 + 4 = 9).
+    assert_eq!(iv(2.0, 2.0).rad(), Some(0.0));
+    assert_eq!(Interval::<f64>::empty().rad(), None); // corpus NaN -> None
+    assert_eq!(Interval::<f64>::entire().rad(), Some(INF));
+    assert_eq!(iv(0.0, INF).rad(), Some(INF));
+    assert_eq!(iv(NEG_INF, 1.2).rad(), Some(INF));
+}
+
+#[test]
+#[ignore = "KNOWN GAP: fixture looseness; a finite nonzero rad is always an outward over-estimate"]
+fn rad_bare_vectors_fixture_loose_known_gap() {
+    // minimal_rad_test: the 4 finite-nonzero-radius vectors (of 9). The
+    // fixture's rad is `sub_up`-widened (and compounds the loose mid), so every
+    // measured value is strictly above the corpus datum, never below (sound).
+    // Corpus datum held below; goes green on a tight backend.
+    assert_eq!(iv(0.0, 2.0).rad(), Some(1.0));
+    assert_eq!(
+        iv(
+            hx("-0X0.0000000000002P-1022"),
+            hx("0X0.0000000000001P-1022")
+        )
+        .rad(),
+        Some(hx("0X0.0000000000002P-1022"))
+    );
+    assert_eq!(
+        iv(hx("0X0.0000000000001P-1022"), hx("0X0.0000000000002P-1022")).rad(),
+        Some(hx("0X0.0000000000001P-1022"))
+    );
+    assert_eq!(
+        iv(hx("0X1P+0"), hx("0X1.0000000000003P+0")).rad(),
+        Some(hx("0X1P-51"))
+    );
+}
+
+#[test]
+fn mid_rad_bare_vectors() {
+    // minimal_mid_rad_test: 5 of 12 vectors exact on this fixture (the remaining
+    // 7 are in mid_rad_bare_vectors_fixture_loose_known_gap; 5 + 7 = 12).
+    assert_eq!(Interval::<f64>::empty().mid_rad(), None); // corpus NaN NaN -> None
+    assert_eq!(Interval::<f64>::entire().mid_rad(), Some((0.0, INF)));
+    assert_eq!(iv(2.0, 2.0).mid_rad(), Some((2.0, 0.0)));
+    assert_eq!(
+        iv(0.0, INF).mid_rad(),
+        Some((hx("0X1.FFFFFFFFFFFFFP+1023"), INF))
+    );
+    assert_eq!(
+        iv(NEG_INF, 1.2).mid_rad(),
+        Some((hx("-0X1.FFFFFFFFFFFFFP+1023"), INF))
+    );
+}
+
+#[test]
+#[ignore = "KNOWN GAP: fixture looseness; bounded mid/rad pairs are outward of the tight Level 2 data"]
+fn mid_rad_bare_vectors_fixture_loose_known_gap() {
+    // minimal_mid_rad_test: the 7 bounded non-singleton vectors (of 12). Beyond
+    // the loose-mid and over-estimated-rad failures above, the realmax-symmetric
+    // pair fails on the radius alone: mid([-MAX, MAX]) = 0 is exact, but
+    // `rad = sub_up(MAX, 0)` steps outward to +inf where the corpus pins MAX
+    // (sound, since [0 - inf, 0 + inf] still encloses; not the tight datum).
+    // Corpus datum held below; goes green on a tight backend.
+    assert_eq!(iv(-MAX, MAX).mid_rad(), Some((0.0, MAX)));
+    assert_eq!(iv(0.0, 2.0).mid_rad(), Some((1.0, 1.0)));
+    assert_eq!(iv(-2.0, 2.0).mid_rad(), Some((0.0, 2.0)));
+    assert_eq!(
+        iv(
+            hx("-0X0.0000000000002P-1022"),
+            hx("0X0.0000000000001P-1022")
+        )
+        .mid_rad(),
+        Some((0.0, hx("0X0.0000000000002P-1022")))
+    );
+    assert_eq!(
+        iv(
+            hx("-0X0.0000000000001P-1022"),
+            hx("0X0.0000000000002P-1022")
+        )
+        .mid_rad(),
+        Some((0.0, hx("0X0.0000000000002P-1022")))
+    );
+    assert_eq!(
+        iv(hx("0X1.FFFFFFFFFFFFFP+1022"), hx("0X1.FFFFFFFFFFFFFP+1023")).mid_rad(),
+        Some((hx("0X1.7FFFFFFFFFFFFP+1023"), hx("0x1.0p+1022")))
+    );
+    assert_eq!(
+        iv(hx("0X0.0000000000001P-1022"), hx("0X0.0000000000003P-1022")).mid_rad(),
+        Some((hx("0X0.0000000000002P-1022"), hx("0X0.0000000000001P-1022")))
+    );
 }
 
 // --- Boolean orderings: equal ---------------------------------------------
@@ -373,7 +545,8 @@ fn strict_precedes_bare_vectors() {
 
 #[test]
 fn overlap_empty_states() {
-    // minimal_overlap_test, the three empty states.
+    // minimal_overlap_test: the 3 empty-state vectors of 48 (the forward fn
+    // carries 26, the reverse fn 19; 3 + 26 + 19 = 48).
     let e = Interval::<f64>::empty();
     assert_eq!(e.overlap(e), Overlap::BothEmpty);
     assert_eq!(e.overlap(iv(1.0, 2.0)), Overlap::FirstEmpty);
@@ -382,10 +555,15 @@ fn overlap_empty_states() {
 
 #[test]
 fn overlap_forward_states() {
-    // minimal_overlap_test: before through equals (self at or left of other).
+    // minimal_overlap_test: the 26 forward-state vectors of 48 (before through
+    // equals; self at or left of other).
     assert_eq!(iv(NEG_INF, 2.0).overlap(iv(3.0, INF)), Overlap::Before);
+    assert_eq!(iv(NEG_INF, 2.0).overlap(iv(3.0, 4.0)), Overlap::Before);
     assert_eq!(iv(2.0, 2.0).overlap(iv(3.0, 4.0)), Overlap::Before);
+    assert_eq!(iv(1.0, 2.0).overlap(iv(3.0, 4.0)), Overlap::Before);
+    assert_eq!(iv(1.0, 2.0).overlap(iv(3.0, 3.0)), Overlap::Before);
     assert_eq!(iv(2.0, 2.0).overlap(iv(3.0, 3.0)), Overlap::Before);
+    assert_eq!(iv(2.0, 2.0).overlap(iv(3.0, INF)), Overlap::Before);
 
     assert_eq!(iv(NEG_INF, 2.0).overlap(iv(2.0, 3.0)), Overlap::Meets);
     assert_eq!(iv(1.0, 2.0).overlap(iv(2.0, 3.0)), Overlap::Meets);
@@ -401,7 +579,9 @@ fn overlap_forward_states() {
         iv(1.0, 2.0).overlap(Interval::entire()),
         Overlap::ContainedBy
     );
+    assert_eq!(iv(1.0, 2.0).overlap(iv(NEG_INF, 3.0)), Overlap::ContainedBy);
     assert_eq!(iv(1.0, 2.0).overlap(iv(0.0, 3.0)), Overlap::ContainedBy);
+    assert_eq!(iv(2.0, 2.0).overlap(iv(0.0, 3.0)), Overlap::ContainedBy);
     assert_eq!(iv(2.0, 2.0).overlap(iv(0.0, INF)), Overlap::ContainedBy);
 
     assert_eq!(iv(1.0, 2.0).overlap(iv(NEG_INF, 2.0)), Overlap::Finishes);
@@ -419,8 +599,11 @@ fn overlap_forward_states() {
 
 #[test]
 fn overlap_reverse_states() {
-    // minimal_overlap_test: the mirror states (self at or right of other).
+    // minimal_overlap_test: the 19 mirror-state vectors of 48 (self at or right
+    // of other).
     assert_eq!(iv(3.0, 4.0).overlap(iv(2.0, 2.0)), Overlap::After);
+    assert_eq!(iv(3.0, 4.0).overlap(iv(1.0, 2.0)), Overlap::After);
+    assert_eq!(iv(3.0, 3.0).overlap(iv(1.0, 2.0)), Overlap::After);
     assert_eq!(iv(3.0, 3.0).overlap(iv(2.0, 2.0)), Overlap::After);
     assert_eq!(iv(3.0, INF).overlap(iv(2.0, 2.0)), Overlap::After);
 
@@ -442,6 +625,7 @@ fn overlap_reverse_states() {
         Interval::<f64>::entire().overlap(iv(1.0, 2.0)),
         Overlap::Contains
     );
+    assert_eq!(iv(0.0, 3.0).overlap(iv(1.0, 2.0)), Overlap::Contains);
     assert_eq!(iv(0.0, 3.0).overlap(iv(2.0, 2.0)), Overlap::Contains);
 
     assert_eq!(iv(NEG_INF, 2.0).overlap(iv(1.0, 2.0)), Overlap::FinishedBy);
@@ -488,8 +672,11 @@ fn decorated_bool_nai_is_always_false() {
 }
 
 #[test]
+// The complete 29-vector corpus table; the length is the corpus's, not logic's.
+#[allow(clippy::too_many_lines)]
 fn decorated_overlap_reads_interval_part() {
-    // minimal_overlap_dec_test: the decoration is ignored.
+    // minimal_overlap_dec_test: 29 vectors. The decoration is ignored; the
+    // interval part decides.
     assert_eq!(
         di_empty(Decoration::Trv).overlap(di_empty(Decoration::Trv)),
         Overlap::BothEmpty
@@ -499,15 +686,129 @@ fn decorated_overlap_reads_interval_part() {
         Overlap::FirstEmpty
     );
     assert_eq!(
+        di(1.0, 2.0, Decoration::Def).overlap(di_empty(Decoration::Trv)),
+        Overlap::SecondEmpty
+    );
+
+    assert_eq!(
+        di(2.0, 2.0, Decoration::Def).overlap(di(3.0, 4.0, Decoration::Def)),
+        Overlap::Before
+    );
+    assert_eq!(
+        di(1.0, 2.0, Decoration::Dac).overlap(di(3.0, 4.0, Decoration::Com)),
+        Overlap::Before
+    );
+    assert_eq!(
+        di(1.0, 2.0, Decoration::Com).overlap(di(3.0, 3.0, Decoration::Trv)),
+        Overlap::Before
+    );
+    assert_eq!(
+        di(2.0, 2.0, Decoration::Trv).overlap(di(3.0, 3.0, Decoration::Def)),
+        Overlap::Before
+    );
+
+    assert_eq!(
+        di(1.0, 2.0, Decoration::Def).overlap(di(2.0, 3.0, Decoration::Def)),
+        Overlap::Meets
+    );
+
+    assert_eq!(
         di(1.0, 2.0, Decoration::Dac).overlap(di(1.5, 2.5, Decoration::Def)),
         Overlap::Overlaps
     );
+
+    assert_eq!(
+        di(1.0, 2.0, Decoration::Def).overlap(di(1.0, 3.0, Decoration::Com)),
+        Overlap::Starts
+    );
+    assert_eq!(
+        di(1.0, 1.0, Decoration::Trv).overlap(di(1.0, 3.0, Decoration::Def)),
+        Overlap::Starts
+    );
+
+    assert_eq!(
+        di(1.0, 2.0, Decoration::Def).overlap(di(0.0, 3.0, Decoration::Dac)),
+        Overlap::ContainedBy
+    );
+    assert_eq!(
+        di(2.0, 2.0, Decoration::Trv).overlap(di(0.0, 3.0, Decoration::Def)),
+        Overlap::ContainedBy
+    );
+
+    assert_eq!(
+        di(1.0, 2.0, Decoration::Trv).overlap(di(0.0, 2.0, Decoration::Com)),
+        Overlap::Finishes
+    );
+    assert_eq!(
+        di(2.0, 2.0, Decoration::Def).overlap(di(0.0, 2.0, Decoration::Dac)),
+        Overlap::Finishes
+    );
+
+    assert_eq!(
+        di(1.0, 2.0, Decoration::Def).overlap(di(1.0, 2.0, Decoration::Def)),
+        Overlap::Equals
+    );
+    assert_eq!(
+        di(1.0, 1.0, Decoration::Dac).overlap(di(1.0, 1.0, Decoration::Dac)),
+        Overlap::Equals
+    );
+
+    assert_eq!(
+        di(3.0, 4.0, Decoration::Trv).overlap(di(2.0, 2.0, Decoration::Trv)),
+        Overlap::After
+    );
+    assert_eq!(
+        di(3.0, 4.0, Decoration::Def).overlap(di(1.0, 2.0, Decoration::Def)),
+        Overlap::After
+    );
+    assert_eq!(
+        di(3.0, 3.0, Decoration::Com).overlap(di(1.0, 2.0, Decoration::Dac)),
+        Overlap::After
+    );
+    assert_eq!(
+        di(3.0, 3.0, Decoration::Def).overlap(di(2.0, 2.0, Decoration::Trv)),
+        Overlap::After
+    );
+
+    assert_eq!(
+        di(2.0, 3.0, Decoration::Def).overlap(di(1.0, 2.0, Decoration::Trv)),
+        Overlap::MetBy
+    );
+
+    assert_eq!(
+        di(1.5, 2.5, Decoration::Com).overlap(di(1.0, 2.0, Decoration::Com)),
+        Overlap::OverlappedBy
+    );
+
+    assert_eq!(
+        di(1.0, 3.0, Decoration::Dac).overlap(di(1.0, 2.0, Decoration::Def)),
+        Overlap::StartedBy
+    );
+    assert_eq!(
+        di(1.0, 3.0, Decoration::Com).overlap(di(1.0, 1.0, Decoration::Dac)),
+        Overlap::StartedBy
+    );
+
     assert_eq!(
         di(0.0, 3.0, Decoration::Com).overlap(di(1.0, 2.0, Decoration::Dac)),
         Overlap::Contains
     );
+    assert_eq!(
+        di(0.0, 3.0, Decoration::Com).overlap(di(2.0, 2.0, Decoration::Def)),
+        Overlap::Contains
+    );
+
+    assert_eq!(
+        di(0.0, 2.0, Decoration::Def).overlap(di(1.0, 2.0, Decoration::Trv)),
+        Overlap::FinishedBy
+    );
+    assert_eq!(
+        di(0.0, 2.0, Decoration::Dac).overlap(di(2.0, 2.0, Decoration::Def)),
+        Overlap::FinishedBy
+    );
+
     // No NaI case is pinned by the vectors; a NaI reads through as its empty
-    // interval part, so two NaIs report bothEmpty.
+    // interval part, so two NaIs report bothEmpty (non-corpus sanity check).
     assert_eq!(nai().overlap(nai()), Overlap::BothEmpty);
 }
 
@@ -1163,9 +1464,11 @@ fn convex_hull_bare_vectors() {
 //   inf/sup accessor is genuinely absent, not just factored away.
 //
 // libieeep1788_rec_bool.itl -- no decorated / recommended operation:
-//   minimal_is_common_interval_dec_test (24 vectors) -- no is_common_interval
-//   minimal_is_singleton_dec_test       (17 vectors) -- no DecoratedInterval::is_singleton
-//   minimal_is_member_dec_test          (39 vectors) -- no is_member
+//   minimal_is_common_interval_dec_test (21 vectors) -- no is_common_interval
+//   minimal_is_singleton_dec_test       (16 vectors) -- no DecoratedInterval::is_singleton
+//   minimal_is_member_dec_test          (40 vectors; the corpus itself repeats
+//     two `isMember ... [empty]_trv = false` statements, and the true statement
+//     count is what is recorded) -- no is_member
 //   The bare intents are covered above (is_singleton exactly; is_common_interval
 //   and is_member via documented composition over is_bounded / contains).
 //

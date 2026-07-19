@@ -1,15 +1,38 @@
 //! Tests for the text I/O surface over the `f64` fixture: `nums_to_interval`,
 //! `text_to_interval` (bare and decorated), the exact hex pair, and `Display`.
 //!
-//! The unit tests transcribe the vendored ITF1788 constructor vectors
-//! (`ieee1788-constructors.itl`, `ieee1788-exceptions.itl`) and the
-//! `textToInterval`/`numsToInterval` cases of `libieeep1788_class.itl`. The
-//! crate reports the standard's `UndefinedOperation` signal as a `Result::Err`
-//! rather than raising it, so each `= [...] signal UndefinedOperation` vector is
-//! transcribed as an expected `Err` (the documented value-versus-signal
-//! divergence). A `= [...] signal PossiblyUndefinedOperation` vector is a valid
-//! result with a warning-level signal, so it is transcribed as the expected `Ok`
-//! interval. A `[nai]` literal is a decorated value and is expected `Ok(nai)`.
+//! # What is transcribed 1:1, what is curated-supplementary
+//!
+//! The `libieeep1788_class.itl` testcases are transcribed 1:1, every statement,
+//! each fn carrying a `// <testcase>: N vectors` count comment:
+//! `minimal_nums_to_interval_test` (8) and
+//! `minimal_nums_to_decorated_interval_test` (8) in the `nums_to_interval_*`
+//! fns; `minimal_text_to_interval_test` (68) and
+//! `minimal_text_to_decorated_interval_test` (71) in the
+//! `text_to_interval_bare_vectors` / `text_to_decorated_interval_vectors` fns;
+//! `minimal_new_dec_test` (13), `minimal_interval_part_test` (14),
+//! `minimal_set_dec_test` (22, six of them the `#[ignore]`d clamping gap below),
+//! and `minimal_decoration_part_test` (6) in the class-constructor fns.
+//!
+//! The remaining unit tests (`exact_representable_anchors`, `keyword_forms`,
+//! `constructor_and_class_valid`, `huge_radius_is_entire`,
+//! `possibly_undefined_is_ok`, `decorated_valid`, the malformed-literal,
+//! length-cap, and Display tests) are
+//! curated-supplementary: they carry the `ieee1788-constructors.itl` and
+//! `ieee1788-exceptions.itl` vectors, independent plain-`f64`-literal anchors,
+//! and adversarial extensions, selected by outcome rather than tiling any one
+//! corpus testcase, and they overlap the 1:1 class fns on some strings. They
+//! make no completeness claim over those two constructor files.
+//!
+//! # Signal mapping
+//!
+//! The crate reports the standard's `UndefinedOperation` signal as a
+//! `Result::Err` rather than raising it, so each
+//! `= [...] signal UndefinedOperation` vector is transcribed as an expected
+//! `Err` (the documented value-versus-signal divergence). A
+//! `= [...] signal PossiblyUndefinedOperation` vector is a valid result with a
+//! warning-level signal, so it is transcribed as the expected `Ok` interval. A
+//! `[nai]` literal is a decorated value and is expected `Ok(nai)`.
 //!
 //! Expected hex-float endpoints cannot go through `str::parse` (Rust does not
 //! read hex floats), so a vector's expected interval is obtained by parsing its
@@ -46,6 +69,11 @@ use interval_1788::{DecoratedInterval, Decoration, Interval};
 use proptest::prelude::*;
 
 // --- helpers ---------------------------------------------------------------
+
+/// The class file's `10?18` followed by 308 zeros: an uncertain form whose
+/// radius saturates the whole line (shared by the bare, decorated, and curated
+/// tests below).
+const HUGE_UNCERTAIN: &str = "10?1800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
 
 fn p(s: &str) -> Interval<f64> {
     Interval::text_to_interval(s).unwrap_or_else(|e| panic!("parse {s:?} failed: {e:?}"))
@@ -104,6 +132,254 @@ fn nums_to_interval_bare() {
     assert!(ni(f64::NEG_INFINITY, f64::NEG_INFINITY).is_err());
     assert!(ni(f64::INFINITY, f64::INFINITY).is_err());
     assert!(ni(f64::INFINITY, f64::NEG_INFINITY).is_err()); // exceptions.itl
+}
+
+// --- class: textToInterval, the 1:1 corpus transcription -------------------
+//
+// The complete minimal_text_to_interval_test and
+// minimal_text_to_decorated_interval_test tables, every statement in corpus
+// order. `= [...]` maps to `chk`/`chk_d` against the corpus's expected literal
+// (parsed through the crate, the file's convention), `[empty]`/`[entire]`
+// results to the exact predicates, and `signal UndefinedOperation` to
+// `bad`/`bad_d` per the value-versus-signal divergence in the module doc. The
+// input strings are byte-for-byte the corpus strings, whitespace and case
+// oddities included (this is the parse surface; fidelity is the point).
+
+#[test]
+fn text_to_interval_bare_vectors() {
+    // minimal_text_to_interval_test: 68 vectors (42 valid + 23 rejects + 3
+    // PossiblyUndefinedOperation-as-Ok).
+    assert!(p("[ Empty  ]").is_empty());
+    bad("[ Empty  ]_trv");
+    assert!(p("[  ]").is_empty());
+    bad("[  ]_trv");
+
+    assert!(p("[,]").is_entire());
+    bad("[,]_trv");
+    assert!(p("[ entire  ]").is_entire());
+    bad("[ ENTIRE ]_dac");
+    assert!(p("[ ENTIRE ]").is_entire());
+    assert!(p("[ -inf , INF  ]").is_entire());
+    bad("[ -inf, INF ]_def");
+
+    chk("[-1.0,1.0]", "[-1.0, 1.0]");
+    chk("[  -1.0  ,  1.0  ]", "[-1.0, 1.0]");
+    chk("[  -1.0  , 1.0]", "[-1.0, 1.0]");
+
+    chk("[-1,]", "[-1.0, infinity]");
+    chk("[-1.0, +inf]", "[-1.0, infinity]");
+    chk("[-1.0, +infinity]", "[-1.0, infinity]");
+
+    chk("[-Inf, 1.000 ]", "[-infinity, 1.0]");
+    chk("[-Infinity, 1.000 ]", "[-infinity, 1.0]");
+
+    chk("[1.0E+400 ]", "[0x1.fffffffffffffp+1023, infinity]");
+
+    chk("[ -4/2, 10/5 ]", "[-2.0, 2.0]");
+    chk("[ -1/10, 1/10 ]", "[-0.1, 0.1]");
+
+    chk("0.0?", "[-0.05, 0.05]");
+    chk("0.0?u", "[0.0, 0.05]");
+    chk("0.0?d", "[-0.05, 0.0]");
+
+    chk("2.5?", "[0x1.3999999999999p+1, 0x1.4666666666667p+1]");
+    chk("2.5?u", "[2.5, 0x1.4666666666667p+1]");
+    chk("2.5?d", "[0x1.3999999999999p+1, 2.5]");
+
+    chk("0.000?5", "[-0.005, 0.005]");
+    chk("0.000?5u", "[0.0, 0.005]");
+    chk("0.000?5d", "[-0.005, 0.0]");
+
+    chk("2.500?5", "[0x1.3f5c28f5c28f5p+1, 0x1.40a3d70a3d70bp+1]");
+    chk("2.500?5u", "[2.5, 0x1.40a3d70a3d70bp+1]");
+    chk("2.500?5d", "[0x1.3f5c28f5c28f5p+1, 2.5]");
+
+    assert!(p("0.0??").is_entire());
+    chk("0.0??u", "[0.0, infinity]");
+    chk("0.0??d", "[-infinity, 0.0]");
+
+    assert!(p("2.5??").is_entire());
+    chk("2.5??u", "[2.5, infinity]");
+    chk("2.5??d", "[-infinity, 2.5]");
+
+    chk(
+        "2.500?5e+27",
+        "[0x1.01fa19a08fe7fp+91, 0x1.0302cc4352683p+91]",
+    );
+    chk("2.500?5ue4", "[0x1.86ap+14, 0x1.8768p+14]");
+    chk(
+        "2.500?5de-5",
+        "[0x1.a2976f1cee4d5p-16, 0x1.a36e2eb1c432dp-16]",
+    );
+
+    chk("10?3", "[7.0, 13.0]");
+    chk("10?3e380", "[0x1.fffffffffffffp+1023, infinity]");
+
+    chk("1.0000000000000001?1", "[1.0, 0x1.0000000000001p+0]");
+
+    // 10?18 + 308 zeros.
+    assert!(p(HUGE_UNCERTAIN).is_entire());
+
+    bad("[ Nai  ]");
+    bad("[ Nai  ]_ill");
+    bad("[ Nai  ]_trv");
+    bad("[ Empty  ]_ill");
+    bad("[  ]_com");
+    bad("[,]_com");
+    bad("[   Entire ]_com");
+    bad("[ -inf ,  INF ]_com");
+    bad("[  -1.0  , 1.0]_ill");
+    bad("[  -1.0  , 1.0]_fooo");
+    bad("[  -1.0  , 1.0]_da");
+    bad("[-1.0,]_com");
+    bad("[-Inf, 1.000 ]_ill");
+    bad("[-I  nf, 1.000 ]");
+    bad("[-Inf, 1.0  00 ]");
+    bad("[-Inf ]");
+    bad("[Inf , INF]");
+    bad("[ foo ]");
+
+    // signal PossiblyUndefinedOperation -> Ok.
+    chk(
+        "[1.0000000000000002,1.0000000000000001]",
+        "[1.0, 0x1.0000000000001p+0]",
+    );
+    chk(
+        "[10000000000000001/10000000000000000,10000000000000002/10000000000000001]",
+        "[1.0, 0x1.0000000000001p+0]",
+    );
+    chk(
+        "[0x1.00000000000002p0,0x1.00000000000001p0]",
+        "[1.0, 0x1.0000000000001p+0]",
+    );
+}
+
+#[test]
+fn text_to_decorated_interval_vectors() {
+    // minimal_text_to_decorated_interval_test: 71 vectors (46 valid, one the
+    // Ok(nai) value, + 22 rejects + 3 PossiblyUndefinedOperation-as-Ok; the
+    // corpus itself repeats the "0.0??_com" reject, kept 1:1).
+    let empty_trv = |s: &str| {
+        let d = pd(s);
+        assert!(d.interval().is_empty(), "{s} interval part");
+        assert_eq!(d.decoration(), Decoration::Trv, "{s} decoration");
+    };
+    let entire_with = |s: &str, want: Decoration| {
+        let d = pd(s);
+        assert!(d.interval().is_entire(), "{s} interval part");
+        assert_eq!(d.decoration(), want, "{s} decoration");
+    };
+
+    empty_trv("[ Empty  ]");
+    empty_trv("[ Empty  ]_trv");
+    empty_trv("[  ]");
+    empty_trv("[  ]_trv");
+
+    entire_with("[,]", Decoration::Dac);
+    entire_with("[,]_trv", Decoration::Trv);
+    entire_with("[ entire  ]", Decoration::Dac);
+    entire_with("[ ENTIRE ]_dac", Decoration::Dac);
+    entire_with("[ -inf , INF  ]", Decoration::Dac);
+    entire_with("[ -inf, INF ]_def", Decoration::Def);
+
+    chk_d("[-1.0,1.0]", "[-1.0, 1.0]_com");
+    chk_d("[  -1.0  ,  1.0  ]_com", "[-1.0, 1.0]_com");
+    chk_d("[  -1.0  , 1.0]_trv", "[-1.0, 1.0]_trv");
+
+    chk_d("[-1,]", "[-1.0, infinity]_dac");
+    chk_d("[-1.0, +inf]_def", "[-1.0, infinity]_def");
+    chk_d("[-1.0, +infinity]_def", "[-1.0, infinity]_def");
+
+    chk_d("[-Inf, 1.000 ]", "[-infinity, 1.0]_dac");
+    chk_d("[-Infinity, 1.000 ]_trv", "[-infinity, 1.0]_trv");
+
+    chk_d("[1.0E+400 ]_com", "[0x1.fffffffffffffp+1023, infinity]_dac");
+
+    chk_d("[ -4/2, 10/5 ]_com", "[-2.0, 2.0]_com");
+    chk_d("[ -1/10, 1/10 ]_com", "[-0.1, 0.1]_com");
+
+    chk_d("0.0?", "[-0.05, 0.05]_com");
+    chk_d("0.0?u_trv", "[0.0, 0.05]_trv");
+    chk_d("0.0?d_dac", "[-0.05, 0.0]_dac");
+
+    chk_d("2.5?", "[0x1.3999999999999p+1, 0x1.4666666666667p+1]_com");
+    chk_d("2.5?u", "[2.5, 0x1.4666666666667p+1]_com");
+    chk_d("2.5?d_trv", "[0x1.3999999999999p+1, 2.5]_trv");
+
+    chk_d("0.000?5", "[-0.005, 0.005]_com");
+    chk_d("0.000?5u_def", "[0.0, 0.005]_def");
+    chk_d("0.000?5d", "[-0.005, 0.0]_com");
+
+    chk_d(
+        "2.500?5",
+        "[0x1.3f5c28f5c28f5p+1, 0x1.40a3d70a3d70bp+1]_com",
+    );
+    chk_d("2.500?5u", "[2.5, 0x1.40a3d70a3d70bp+1]_com");
+    chk_d("2.500?5d", "[0x1.3f5c28f5c28f5p+1, 2.5]_com");
+
+    entire_with("0.0??_dac", Decoration::Dac);
+    chk_d("0.0??u_trv", "[0.0, infinity]_trv");
+    chk_d("0.0??d", "[-infinity, 0.0]_dac");
+
+    entire_with("2.5??", Decoration::Dac);
+    chk_d("2.5??u_def", "[2.5, infinity]_def");
+    chk_d("2.5??d_dac", "[-infinity, 2.5]_dac");
+
+    chk_d(
+        "2.500?5e+27",
+        "[0x1.01fa19a08fe7fp+91, 0x1.0302cc4352683p+91]_com",
+    );
+    chk_d("2.500?5ue4_def", "[0x1.86ap+14, 0x1.8768p+14]_def");
+    chk_d(
+        "2.500?5de-5",
+        "[0x1.a2976f1cee4d5p-16, 0x1.a36e2eb1c432dp-16]_com",
+    );
+
+    // [nai] is a value, not a reject.
+    assert!(pd("[ Nai  ]").is_nai());
+
+    // 10?18 + 308 zeros, with an explicit com demoted by the unbounded result.
+    entire_with(&format!("{HUGE_UNCERTAIN}_com"), Decoration::Dac);
+
+    chk_d("10?3_com", "[7.0, 13.0]_com");
+    chk_d("10?3e380_com", "[0x1.fffffffffffffp+1023, infinity]_dac");
+
+    bad_d("[ Nai  ]_ill");
+    bad_d("[ Nai  ]_trv");
+    bad_d("[ Empty  ]_ill");
+    bad_d("[  ]_com");
+    bad_d("[,]_com");
+    bad_d("[   Entire ]_com");
+    bad_d("[ -inf ,  INF ]_com");
+    bad_d("[  -1.0  , 1.0]_ill");
+    bad_d("[  -1.0  , 1.0]_fooo");
+    bad_d("[  -1.0  , 1.0]_da");
+    bad_d("[-1.0,]_com");
+    bad_d("[-Inf, 1.000 ]_ill");
+    bad_d("[-I  nf, 1.000 ]");
+    bad_d("[-Inf, 1.0  00 ]");
+    bad_d("[-Inf ]");
+    bad_d("[Inf , INF]");
+    bad_d("[ foo ]");
+    bad_d("0.0??_com");
+    bad_d("0.0??u_ill");
+    bad_d("0.0??d_com");
+    bad_d("0.0??_com"); // repeated in the corpus; kept 1:1
+    bad_d("[1.0,2.0");
+
+    // signal PossiblyUndefinedOperation -> Ok.
+    chk_d(
+        "[1.0000000000000002,1.0000000000000001]",
+        "[1.0, 0x1.0000000000001p+0]_com",
+    );
+    chk_d(
+        "[10000000000000001/10000000000000000,10000000000000002/10000000000000001]",
+        "[1.0, 0x1.0000000000001p+0]_com",
+    );
+    chk_d(
+        "[0x1.00000000000002p0,0x1.00000000000001p0]",
+        "[1.0, 0x1.0000000000001p+0]_com",
+    );
 }
 
 #[test]
@@ -456,11 +732,11 @@ fn constructor_and_class_valid() {
     chk("1.0000000000000001?1", "[1.0, 0x1.0000000000001p+0]");
 }
 
-/// The 310-digit radius saturates to the whole line (class file).
+/// The 310-digit radius saturates to the whole line (class file; curated echo of
+/// the 1:1 vector above).
 #[test]
 fn huge_radius_is_entire() {
-    let s = "10?1800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-    assert!(p(s).is_entire());
+    assert!(p(HUGE_UNCERTAIN).is_entire());
 }
 
 /// A written lower bound above the written upper bound still forms a valid
