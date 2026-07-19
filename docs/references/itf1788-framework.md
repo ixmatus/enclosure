@@ -42,6 +42,26 @@ consumers:
     battery design; libieeep1788_rev.itl, libieeep1788_mul_rev.itl, abs_rev.itl,
     and pow_rev.itl as its acceptance vectors, one fixture test file per itl
     file in the implementing slice)
+  - crates/interval-1788/tests/conformance_arith_tight.rs (the
+    libieeep1788_elem.itl arithmetic testcases, all 1373 vectors bit-exact over
+    TightF64; surfaced the division and pown tightness defects enc-ghz and
+    enc-5jj)
+  - crates/interval-1788/tests/conformance_reverse_tight.rs (the arithmetic
+    reverse testcases of libieeep1788_rev.itl, libieeep1788_mul_rev.itl, and
+    abs_rev.itl, all 995 vectors bit-exact over TightF64; surfaced enc-cov,
+    enc-ral, and the decorated mulRevToPair doctrine question enc-pzd)
+  - crates/interval-1788/tests/exp_log_fixture.rs (the minimal_exp and
+    minimal_log families of libieeep1788_elem.itl, bare and decorated,
+    enclosure idiom over the fixture)
+  - the numeric_boolean and text_io fixtures' conformance completions (bead
+    enc-ac4 slice 3: libieeep1788_bool.itl in full, the num accessors,
+    rec_bool, set, and the class decorated constructors; surfaced enc-2hd and
+    enc-ks9). NOT transcribed, deliberately: mpfi.itl and fi_lib.itl
+    (LGPL-2.1-or-later; adapting copyleft vector files into the permissive
+    test tree is declined, and their coverage duplicates the required-op
+    surface the Apache files pin) and c-xsc.itl beyond the three rootn
+    vectors already in trig_pow_fixture.rs (no license stated for that file
+    in this registry; flagged rather than extended)
   - crates/interval-1788/tests/reverse_rev_fixture.rs (sqrRev, absRev, pownRev,
     sinRev, cosRev, tanRev, coshRev, mulRev, and the ternary mulRevTen from
     libieeep1788_rev.itl, bare and decorated; structural cases exact, the

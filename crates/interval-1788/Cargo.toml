@@ -39,6 +39,10 @@ round-float = { path = "../round-float" }
 
 [dev-dependencies]
 proptest = "1"
+# The conformance lanes assert the corpus bit-exactly over the correctly
+# rounded TightF64 backend; a dev-dependency so the shipped library's feature
+# set is untouched (dev features unify only into test builds).
+round-float = { path = "../round-float", features = ["f64-tight"] }
 
 # The property lanes exercise the f64 fixture instance.
 [[test]]
@@ -55,6 +59,10 @@ required-features = ["fixture"]
 
 [[test]]
 name = "elementary_fixture"
+required-features = ["fixture"]
+
+[[test]]
+name = "exp_log_fixture"
 required-features = ["fixture"]
 
 [[test]]
@@ -96,6 +104,14 @@ required-features = ["fixture"]
 [[test]]
 name = "reverse_property"
 required-features = ["fixture"]
+
+# The TightF64 conformance lanes need no feature gate: the backend rides the
+# dev-dependency above, and Interval's core is feature-free.
+[[test]]
+name = "conformance_arith_tight"
+
+[[test]]
+name = "conformance_reverse_tight"
 
 [lints.rust]
 unsafe_code = "forbid"
