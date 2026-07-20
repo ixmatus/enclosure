@@ -81,7 +81,17 @@ jobs:
       # affine-arith's discrete skeleton (symbol freshness, from_raw_parts, merge shape, condensation counts).
       - uses: model-checking/kani-github-action@v1
         with:
-          args: "-p affine-arith --features fixture"
+          # from_raw_parts_accepts_exactly_faithful_input is NOT in this list:
+          # its formula (15 million SAT variables for a thirty-line function,
+          # dominated by bit-blasted Vec and allocator machinery, not by its
+          # symbolic inputs) sits at the standard runner's memory cliff and
+          # killed the wave-5b run by runner OOM mid-solve. It remains in the
+          # tree as a locally verified proof (discharges in about three
+          # minutes; observations recorded in the bead) and rejoins this list
+          # when the footprint is understood or the runner grows. Bead
+          # enc-ac4's successor tracks it; the harness module doc carries the
+          # same notice.
+          args: "-p affine-arith --features fixture --harness condense_bounds_terms_and_preserves_order --harness fresh_is_strictly_increasing --harness unscoped_at_resumption_is_fresh --harness fresh_at_exhaustion_panics"
       # round-float's Kulisch accumulator carry, borrow, and shift-index logic.
       - uses: model-checking/kani-github-action@v1
         with:
