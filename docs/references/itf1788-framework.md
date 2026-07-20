@@ -23,6 +23,10 @@ vendor-status: vendored-at-path
 rot-risk: died-once
 provenance-class: primary
 consumers:
+  - crates/interval-1788/docs/conformance.md (the conformance document: the
+    per-instantiation claim, the certified-vector totals, the open-item and
+    divergence tables, and the license-exclusion rationale all ground in this
+    corpus and its per-file licenses)
   - crates/interval-1788/src/lib.rs (roadmap conformance lane)
   - crates/interval-1788/docs/decisions/0003-kani-over-f64-fixture.md
   - crates/interval-1788/README.md (verification disclosure)
