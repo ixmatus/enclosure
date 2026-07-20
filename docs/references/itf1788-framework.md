@@ -14,9 +14,11 @@ archive-date: 2023-12-24
 retrieved: 2026-06-11
 license: >-
   framework Apache-2.0 (LICENSE + NOTICE, copyright 2014 Nehmeier and Kiesner);
-  itl vectors per file: libieeep1788_*.itl Apache-2.0; fi_lib.itl and mpfi.itl
-  LGPL-2.1-or-later (COPYING.LESSER vendored alongside); ieee1788-constructors
-  and ieee1788-exceptions all-permissive (Heimlich 2016)
+  itl vectors per file: libieeep1788_*.itl Apache-2.0; fi_lib.itl, mpfi.itl,
+  and c-xsc.itl LGPL-2.1-or-later (each carries the license header; the c-xsc
+  header names Karlsruhe/Wuppertal 1990-2014 and Heimlich 2015-2016, verified
+  from the vendored file 2026-07-20; COPYING.LESSER vendored alongside);
+  ieee1788-constructors and ieee1788-exceptions all-permissive (Heimlich 2016)
 vendor-status: vendored-at-path
 rot-risk: died-once
 provenance-class: primary
@@ -32,8 +34,12 @@ consumers:
   - crates/interval-1788/tests/cancel_fixture.rs (cancelMinus and cancelPlus
     vectors, bare and decorated, from libieeep1788_cancel.itl)
   - crates/interval-1788/tests/trig_pow_fixture.rs (sin, cos, tan, sinh, cosh,
-    tanh, pow vectors bare and decorated from libieeep1788_elem.itl, and the
-    three rootn vectors from c-xsc.itl, the only rootn cases in the corpus)
+    tanh, pow vectors bare and decorated from libieeep1788_elem.itl; the rootn
+    cases are independent integer-arithmetic derivations, NOT transcriptions:
+    the corpus's only rootn vectors live in the LGPL c-xsc.itl, whose three
+    cases were transcribed 2026-06 under a mistaken Apache attribution and
+    replaced by fresh derivations 2026-07-20 when the header's
+    LGPL-2.1-or-later text was established)
   - crates/interval-1788/tests/inverse_fixture.rs (asin, acos, atan, asinh, acosh,
     atanh, exp2, exp10, log2, log10, pown vectors bare and decorated from
     libieeep1788_elem.itl; hex-float literals parsed in-test rather than
@@ -56,12 +62,13 @@ consumers:
   - the numeric_boolean and text_io fixtures' conformance completions (bead
     enc-ac4 slice 3: libieeep1788_bool.itl in full, the num accessors,
     rec_bool, set, and the class decorated constructors; surfaced enc-2hd and
-    enc-ks9). NOT transcribed, deliberately: mpfi.itl and fi_lib.itl
-    (LGPL-2.1-or-later; adapting copyleft vector files into the permissive
-    test tree is declined, and their coverage duplicates the required-op
-    surface the Apache files pin) and c-xsc.itl beyond the three rootn
-    vectors already in trig_pow_fixture.rs (no license stated for that file
-    in this registry; flagged rather than extended)
+    enc-ks9). NOT transcribed, deliberately: mpfi.itl, fi_lib.itl, and
+    c-xsc.itl (all LGPL-2.1-or-later per their headers; adapting copyleft
+    vector files into the permissive test tree is declined, and their
+    coverage duplicates the required-op surface the Apache files pin). The
+    three c-xsc rootn vectors once transcribed under a mistaken Apache
+    attribution were replaced by independent derivations 2026-07-20; no
+    copyleft transcription remains in the tree
   - crates/interval-1788/tests/reverse_rev_fixture.rs (sqrRev, absRev, pownRev,
     sinRev, cosRev, tanRev, coshRev, mulRev, and the ternary mulRevTen from
     libieeep1788_rev.itl, bare and decorated; structural cases exact, the
