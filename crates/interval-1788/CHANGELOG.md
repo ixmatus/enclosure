@@ -8,6 +8,15 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Added
 
+- The conformance document (`docs/conformance.md`, ledger item 13): the
+  per-instantiation claim structure (the claim attaches to `TightF64`, never
+  the generic crate), the operation and naming map, the lane's certified
+  totals (2,368 bit-exact vectors, zero soundness violations), the six open
+  items with their beads, the named divergences (values-not-signals, the
+  generic surface, the decorated `mulRevToPair` doctrine question), and the
+  evidence basis with its limits. A living document, dated, that becomes the
+  clause-12 claim at v1.0 and does not retire the README disclosures.
+
 - The conformance vector lane (bead enc-ac4), split by backend. Over the
   correctly rounded `TightF64` (a dev-dependency; the shipped surface is
   untouched): the `libieeep1788_elem.itl` arithmetic testcases, all 1373

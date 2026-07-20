@@ -3,8 +3,11 @@
 //! decorated.
 //!
 //! The unit tests transcribe a representative selection of the vendored ITF1788
-//! `libieeep1788_elem.itl` vectors (and the three `rootn` vectors from
-//! `c-xsc.itl`, the only `rootn` cases in the corpus). Because the fixture is
+//! `libieeep1788_elem.itl` vectors; the `rootn` cases are derived from integer
+//! arithmetic rather than transcribed, because the corpus's only `rootn`
+//! vectors live in the LGPL-licensed `c-xsc.itl`, which this permissively
+//! licensed tree does not adapt (registry entry: itf1788-framework). Because
+//! the fixture is
 //! deliberately sound-not-tight (each transcendental is widened by a relative
 //! margin and stepped outward), a fixture result is generally WIDER than the
 //! correctly-rounded vector interval, so the transcription asserts the SOUND
@@ -20,9 +23,12 @@
 //! shortcut, critical-point stress near the `k*pi/2` boundaries, the `cosh`
 //! minimum, the `pow`/`rootn` sign-case grid, and the `tan` pole straddle.
 //!
-//! Cases derived from ITF1788 `libieeep1788_elem.itl` and `c-xsc.itl` (Apache-2.0,
-//! original author Marco Nehmeier, C-XSC and ITL port Oliver Heimlich; see
-//! `docs/references/vendor/itf1788-framework/`).
+//! Cases derived from ITF1788 `libieeep1788_elem.itl` (Apache-2.0, original
+//! author Marco Nehmeier, ITL port Oliver Heimlich; see
+//! `docs/references/vendor/itf1788-framework/`). An earlier revision
+//! attributed `c-xsc.itl` here as Apache-2.0; its header is in fact
+//! LGPL-2.1-or-later, and its three vectors were replaced by independent
+//! derivations on 2026-07-20.
 
 use core::f64::consts::{FRAC_PI_2, PI};
 use interval_1788::{DecoratedInterval, Decoration, Interval};
@@ -214,14 +220,19 @@ fn pow_vectors() {
     assert!(iv(0.0, 0.0).pow(iv(-1.0, 0.0)).is_empty());
 }
 
-// --- Bare rootn (c-xsc.itl) ------------------------------------------------
+// --- Bare rootn (derived) ---------------------------------------------------
 
 #[test]
 fn rootn_vectors() {
-    // rootn [27,27] 3 = [3,3]; rootn [0,0] 4 = [0,0]; rootn [1024,1024] 10 = [2,2].
-    encloses(iv(27.0, 27.0).rootn(3), 3.0, 3.0);
-    encloses(iv(0.0, 0.0).rootn(4), 0.0, 0.0);
-    encloses(iv(1024.0, 1024.0).rootn(10), 2.0, 2.0);
+    // Derived from integer arithmetic, not transcribed from any vector set
+    // (the corpus's only rootn cases live in the LGPL c-xsc.itl, which this
+    // permissive tree does not adapt; see the registry entry): 5^3 = 125,
+    // 0^5 = 0, 3^10 = 59049, and 2^4 = 16 with 3^4 = 81, so each root below
+    // is the exact integer preimage.
+    encloses(iv(125.0, 125.0).rootn(3), 5.0, 5.0);
+    encloses(iv(0.0, 0.0).rootn(5), 0.0, 0.0);
+    encloses(iv(59049.0, 59049.0).rootn(10), 3.0, 3.0);
+    encloses(iv(16.0, 81.0).rootn(4), 2.0, 3.0);
     // Derived: odd root of a negative base is real; even root drops the negative part.
     encloses(iv(-8.0, -8.0).rootn(3), -2.0, -2.0);
     encloses(iv(-8.0, 27.0).rootn(3), -2.0, 3.0);
