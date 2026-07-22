@@ -39,21 +39,18 @@
 //!
 //! # Decorations
 //!
-//! Decision record 0006 part 5: every reverse decorates `trv`, with `NaI`
-//! propagating. The decorated testcases assert the output interval AND the
+//! Decision record 0006 part 5: every one-output reverse decorates `trv`, with
+//! `NaI` propagating. The two-output reverse division is the standard's own
+//! exception (clause 12.12.3): its first piece carries the normal division's
+//! decoration whenever `0` is outside the divisor `b`, and its empty second
+//! piece is `trv`. The decorated testcases assert the output interval AND the
 //! output decoration exactly.
 //!
-//! # Known gap: `minimal_mulRevToPair_dec_test`
-//!
-//! That one testcase is shipped `#[ignore]` (KNOWN GAP). The corpus assigns
-//! the reverse-division's output pieces a PROPAGATED decoration
-//! (`com`/`dac`/`def`) whenever `0` is not in `b`, whereas the crate follows
-//! ADR-0006 part 5 and grades every reverse-operation output `trv`. The bare
-//! grid (`minimal_mulRevToPair_test`) pins every interval exactly and passes;
-//! the decoration divergence is the named gap. See the slice report and the
-//! conformance document (enc-su3). No other decorated testcase diverges: the
-//! single-output `mulRev`, `sqrRev`, `absRev`, and `pownRev` decorated corpora
-//! all pin `trv` outputs and pass.
+//! The single-output `mulRev`, `sqrRev`, `absRev`, and `pownRev` decorated
+//! corpora all pin `trv` outputs and pass; `mulRevToPair` propagates on its
+//! first piece and is asserted exactly against the corpus in
+//! `mul_rev_to_pair_dec_test`. See the decision record's erratum and the
+//! conformance document (enc-su3).
 
 // The corpus carries long hex-fraction literals inside strings (parsed by `hx`)
 // and a handful of multi-digit decimal literals; neither trips a lint here, but
@@ -216,8 +213,9 @@ fn di(v: E, d: Decoration) -> DI {
 }
 
 /// Assert a decorated `mulRevToPair` output piece bit-exactly (interval AND
-/// decoration). Used only by the KNOWN GAP lane, which the crate's trv-always
-/// doctrine (ADR-0006 part 5) fails against the corpus's propagated decoration.
+/// decoration). The first piece carries the normal division's decoration when
+/// zero is outside the divisor (clause 12.12.3), so the crate matches the
+/// corpus's propagated decoration here.
 #[track_caller]
 fn eq_dpiece(got: DecoratedInterval<TightF64>, want: DI) {
     match want {
@@ -2533,18 +2531,17 @@ fn mul_rev_to_pair_test() {
     group(ENT, [(ENT, e); 13]);
 }
 
-// minimal_mulRevToPair_dec_test: 175 vectors (KNOWN GAP, `#[ignore]`)
+// minimal_mulRevToPair_dec_test: 175 vectors
 //
-// The corpus assigns the reverse-division's output pieces a PROPAGATED
-// decoration (`com`/`dac`/`def`) whenever `0` is not in `b`; the crate follows
-// ADR-0006 part 5 and grades every reverse output `trv`. This lane transcribes
-// the corpus decorations faithfully and asserts them exactly, so it is red when
-// run. The intervals are all pinned (and pass) by `mul_rev_to_pair_test`; only
-// the decoration doctrine diverges. Un-ignore if the crate's reverse-decoration
-// doctrine is ever changed to propagate. Note: the reverse.rs module doc's claim
-// that "the vendored decorated vectors pin [trv] on every line" is FALSE here.
+// The corpus assigns the reverse-division's first output piece the PROPAGATED
+// decoration of the normal division (`com`/`dac`/`def`) whenever `0` is not in
+// `b`, and grades the empty second piece `trv`. The standard defines the two-
+// output division in its own subclause and gives the first piece the division
+// decoration (clause 12.12.3); the crate matches, so this lane transcribes the
+// corpus decorations faithfully and asserts them exactly. The intervals are also
+// pinned (and pass) by `mul_rev_to_pair_test`. The generic `trv` doctrine stands
+// for the one-output reverse operations; only the two-output division propagates.
 #[test]
-#[ignore = "KNOWN GAP: mulRevToPair corpus propagates com/dac/def to output pieces; crate grades trv (ADR-0006 part 5); see module docs"]
 fn mul_rev_to_pair_dec_test() {
     let a = hx("0X1.999999999999AP-3");
     let big = hx("0X1.5P+4");

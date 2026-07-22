@@ -16,6 +16,7 @@ rot-risk: single-maintainer
 provenance-class: secondary
 consumers:
   - crates/interval-1788/README.md (named behavioral oracle in the provenance disclosure)
+  - crates/interval-1788/src/reverse.rs (independent oracle for the decorated `mul_rev_to_pair` first piece decoration doctrine)
 verification:
   - none yet (oracle cross checks are manual; no automated lane)
 sha256: none
@@ -51,3 +52,13 @@ and the mirror at
 web.archive.org/web/20260717080758/https://github.com/oheim/octave-interval.
 The conformance claim text stays summarized above so the fact survives the
 URL regardless.
+
+The package's `@infsupdec/mulrev.m` is an independent post final witness for the
+`mulRevToPair` decoration doctrine (bead enc-pzd): it masks the first output
+piece to trv only when zero is inside the divisor and otherwise meets the input
+decorations with the normal division's grade, matching the standard's clause
+12.12.3 rule the enclosure crate now follows. GPL means oracle only: the
+behavior is cross checked, the code is never adapted. Snapshots taken 2026-07-22:
+`mulrev.m` at web.archive.org/web/20260722155552, and the two commits that shaped
+it, 6c7e5e245f02337b29eefde858a832f4d2b85519 at web.archive.org/web/20260722155925
+and fcf14a0e1b039afb96740252a9702c121cfa21d8 at web.archive.org/web/20260722160014.

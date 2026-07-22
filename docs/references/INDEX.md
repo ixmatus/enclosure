@@ -49,6 +49,9 @@ and the accretion ritual.
 - [Kearfott 2013, the P-1788 overview](kearfott-2013-p1788-overview.md) — the working group chair's own account; free proxy for the standard's rationale
 - [Pryce 2016, the forthcoming standard 1788](pryce-2016-forthcoming-1788.md) — the technical editor's design rationale; free proxy
 - [Kulisch 2008 P1788 draft, complete arithmetic](kulisch-2008-p1788-draft.md) — the exact-dot-product lineage behind the clause 12.2.12 reductions
+- [P1788/D8.4 full standard draft (June 2014)](p1788-d8-4-draft.md) — the clause 12.12.4 two output division decoration rule the reverse doctrine rests on
+- [Motion divPair (Wolff von Gudenberg 2013)](p1788-motion-divpair.md) — the working group motion behind the split decoration doctrine's design lineage
+- [P1788 mailing list threads](p1788-mailing-list-threads.md) — the post ballot clause numbering and the reverse mode merge witness
 - [Interval Computations site and reliable_computing list](interval-computations-site.md) — the community hub and the standardization record
 - [Reliable Computing, the journal](reliable-computing-journal.md) — the field's venue of record, community run since 2009
 
