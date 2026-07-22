@@ -11,7 +11,7 @@ v1.0; before then the API may break between 0.x releases.
 - The conformance document (`docs/conformance.md`, ledger item 13): the
   per-instantiation claim structure (the claim attaches to `TightF64`, never
   the generic crate), the operation and naming map, the lane's certified
-  totals (2,368 bit-exact vectors, zero soundness violations), the six open
+  totals (2,409 bit-exact vectors, zero soundness violations), the six open
   items with their beads, the named divergences (values-not-signals, the
   generic surface, the decorated `mulRevToPair` doctrine question), and the
   evidence basis with its limits. A living document, dated, that becomes the
@@ -38,11 +38,7 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Known issues, surfaced by the lane and tracked as beads
 
-- `pown`'s repeated squaring is loose for exponent magnitude three and above,
-  and its negative-power overflow path
-  collapses near the subnormal edge, 41 vectors (enc-5jj, falsifying the
-  workspace decision record 0007's assumption that the corpus could not
-  distinguish chain tightness). `pown_rev`'s root bisection leaves one-to-
+- `pown_rev`'s root bisection leaves one-to-
   three-ulp brackets for exponent magnitude three and above, 44 vectors
   (enc-cov, an erratum owed to decision record 0006 part 3), and its
   negative-exponent path saturates the set-level reciprocal at the subnormal
@@ -105,8 +101,10 @@ v1.0; before then the API may break between 0.x releases.
   in a new `inverse` module: `asin`, `acos`, `atan`, `atan2` (behind
   `F: RoundInverseTrig`), `asinh`, `acosh`, `atanh` (behind
   `F: RoundInverseHyperbolic`), `exp2`, `exp10`, `log2`, `log10` (behind
-  `F: RoundExpBases`), and `pown` over bare `RoundFloat` as directed integer
-  power chains with the negative exponent taken as the set-level reciprocal. Ten
+  `F: RoundExpBases`), and `pown` behind `F: RoundFloat + RoundPown`, its
+  endpoint powers correctly rounded by the exact integer kernel and its
+  negative-exponent image derived endpoint-wise under a parity and zero-position
+  case table (round-float decision record 0004). Ten of the transcendental
   arms are monotone endpoint images with set-based domain restriction (`acos`
   antitone); `atan2` is a directed corner reduction derived from the vanishing
   gradient, with the full-hull branch-cut crossing, the `+0` normalization for
@@ -324,6 +322,12 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Changed
 
+- `Interval::pown` and `DecoratedInterval::pown` now sit behind the
+  `F: RoundFloat + RoundPown` bound (was bare `RoundFloat`): each endpoint power
+  is a correctly rounded kernel call rather than a directed repeated-squaring
+  chain. A compile break for a third-party backend that implements only bare
+  `RoundFloat`; accepted pre-1.0, since a conforming backend owes `pown`.
+  Round-float decision record 0004.
 - `mid`, `rad`, and `mid_rad` now sit behind the `RoundLargestFinite` capability
   bound and follow IEEE 1788's Level 2 realmax convention on half-unbounded
   intervals: `mid([a, +inf]) = +LARGEST_FINITE`, `mid([-inf, b]) =
@@ -362,7 +366,17 @@ v1.0; before then the API may break between 0.x releases.
   are folded back into `minimal_div_test`; all 341 `div` rows are bit-exact over
   `TightF64`, and a property lane checks soundness on sampled points and that the
   new result is a subset of the old reciprocal composition (bead enc-ghz).
-
+- `pown` is now bit-exact tightest over `TightF64` on all 163 corpus vectors
+  (bead enc-5jj). The two tightness losses are gone: the repeated-squaring chain
+  rounded once per multiply (loose for exponent magnitude three and above), and
+  the negative-power path took a set-level reciprocal of the magnitude image that
+  collapsed near the subnormal edge when the magnitude power overflowed (a
+  `[f64::MAX, f64::MAX]` base with `|n| >= 2` yielded `[+0, ~2^-1024]` where the
+  tight result is `[+0, 2^-1074]`). Endpoint powers now ride the exact
+  `RoundPown` integer kernel, and the negative-exponent image is derived
+  endpoint-wise under a parity and zero-position case table. The former
+  known-defect twin `minimal_pown_test_known_defect` is retired. Round-float
+  decision record 0004; workspace decision record 0007 erratum.
 - Decorated `+`, `-`, `*`, `/`, `recip`, `sqr`, `sqrt`, and `mul_add` no longer
   pack `com` with an overflowed unbounded result. A bounded operation can reach
   `[lo, +inf]`, and `com` promises a bounded result, so the shared `pack` seam

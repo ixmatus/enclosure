@@ -21,7 +21,7 @@ to instantiations, never to the generic crate:
   rounded binary64 backend from round-float's `f64-tight` feature) are the
   conformance target: the set-based flavor over the binary64 inf-sup Level 2
   type. Today this instantiation demonstrates bit-exact tightest results on
-  2,368 corpus vectors across the arithmetic and arithmetic-reverse
+  2,409 corpus vectors across the arithmetic and arithmetic-reverse
   operations, with the open items of section 4 standing between it and the
   full claim.
 - **`Interval<f64>` over the fixture** (round-float's `f64` feature) is
@@ -66,8 +66,8 @@ every ignored lane asserts corpus data) confirmed the transcriptions
 complete and faithful. Certified today:
 
 - Single-rounding arithmetic is bit-exact tightest: `pos`, `neg`, `add`,
-  `sub`, `mul`, `recip`, `sqr`, `sqrt`, `fma`, the full `div` rows, and the
-  in-budget `pown` rows; 1,332 vectors.
+  `sub`, `mul`, `div`, `recip`, `sqr`, `sqrt`, `fma`, and `pown`, every row
+  of every testcase; 1,373 vectors.
 - The arithmetic reverses are bit-exact tightest as decision record 0006
   part 2 promised, except the `pownRev` root family of section 4: `sqrRev`,
   `absRev`, `mulRev` (unary, binary, ternary), the full `mulRevToPair`
@@ -87,9 +87,10 @@ datum, so the fix is verified by the lane the day it lands:
 1. **Division is bit-exact tightest** (resolved 2026-07-22, bead enc-ghz):
    direct directed division rounds each quotient endpoint once; the 56 relocated
    vectors are folded back and all 341 `div` rows pass in `minimal_div_test`.
-2. **`pown` is looser than tightest** for exponent magnitude three and
-   above, and its negative-power overflow path collapses near the subnormal
-   edge; 41 vectors (bead enc-5jj).
+2. **`pown` tightness (resolved 2026-07-22):** the repeated-squaring
+   looseness and the negative-power overflow collapse are fixed by the exact
+   `RoundPown` integer kernel (bead enc-5jj, round-float decision record 0004);
+   all 163 pown vectors now pass bit-exact.
 3. **`pownRev`'s root bisection** leaves one-to-three-ulp brackets for
    exponent magnitude three and above (44 vectors, bead enc-cov; decision
    record 0006 part 3 carries an erratum obligation for its exactness

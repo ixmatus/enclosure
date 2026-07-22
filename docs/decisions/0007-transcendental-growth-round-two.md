@@ -220,3 +220,11 @@ the workspace tooling default of pure Rust dev dependencies.
   battery even in the simplified profile).
 - Beads: enc-dw4 (this design and its implementing half), enc-34n (round
   one, untouched), enc-ac4 (the conformance lane consumer).
+
+## Errata
+
+**2026-07-22: the corpus vectors do distinguish the chain's looseness.** 41 of
+163 pown vectors fail bit-exactness over TightF64 (bead enc-5jj); the assumption
+inverted, and round-float ADR-0004 reverses the decision: pown grows the
+`RoundPown` extension trait with an exact integer kernel. The original text
+stands as written.
