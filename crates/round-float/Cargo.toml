@@ -63,6 +63,13 @@ required-features = ["f64-tight"]
 name = "reduction_oracle"
 required-features = ["f64-tight"]
 
+# The astro-float exact-reference property lane for the pown kernel: correct
+# rounding in the exact range, soundness past it, and the special table. Needs
+# both backends (it cross-checks the fixture against TightF64 through the kernel).
+[[test]]
+name = "pown_oracle"
+required-features = ["f64-tight", "f64"]
+
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"

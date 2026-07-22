@@ -7,10 +7,12 @@
 //! images with domain restriction per the set-based flavor. `acos` is the lone
 //! antitone one; its arm swaps the endpoints. `atan2` is the exception that
 //! earns its own rule (a branch cut rather than a period), derived below from
-//! the image of the principal angle over a box. `pown` rides bare
-//! [`RoundFloat`] as directed integer-power chains, with the negative exponent
-//! taken as the set-level reciprocal of the positive one. See workspace
-//! decision record 0007.
+//! the image of the principal angle over a box. `pown` rides
+//! [`RoundPown`], whose exact integer kernel rounds each endpoint power
+//! correctly; the negative exponent is taken endpoint-wise from negative kernel
+//! powers under a parity and zero-position case analysis, not the set-level
+//! reciprocal of the positive image. See workspace decision record 0007 and
+//! round-float decision record 0004.
 //!
 //! # The atan2 rule
 //!
@@ -39,7 +41,7 @@
 //! that edge's far corner (the edge is monotone).
 
 use crate::interval::Interval;
-use round_float::{RoundExpBases, RoundFloat, RoundInverseHyperbolic, RoundInverseTrig};
+use round_float::{RoundExpBases, RoundFloat, RoundInverseHyperbolic, RoundInverseTrig, RoundPown};
 
 // --- Inverse trigonometric: asin, acos, atan, atan2 ------------------------
 
@@ -325,142 +327,94 @@ impl<F: RoundFloat + RoundExpBases> Interval<F> {
 
 // --- Integer power: pown ---------------------------------------------------
 
-/// `|x|` for a finite `x`, by a sign flip (covers `-0`).
-#[inline]
-fn fabs<F: RoundFloat>(x: F) -> F {
-    if x.is_sign_negative() {
-        x.negate()
+/// The image of `x^n` over `[a, b]` for a positive exponent `n >= 1`, each
+/// endpoint power a correctly rounded [`RoundPown`] call.
+///
+/// An odd power is monotone increasing, so the image is the endpoint pair. An
+/// even power is `|x|^n`, so its maximum sits at the larger-magnitude endpoint
+/// and its minimum at zero when zero is in `[a, b]`, else at the smaller-
+/// magnitude endpoint. Both endpoint choices reduce to `rmin`/`rmax` over the
+/// two endpoint powers: for an even `n`, `pown(a, n)` and `pown(b, n)` are the
+/// nonnegative `|a|^n` and `|b|^n`, so their min and max are exactly the image
+/// bounds. Infinite endpoints ride the kernel's `pown(+/-inf, n)` directly.
+fn pos_pown_image<F: RoundFloat + RoundPown>(a: F, b: F, n: i32) -> Interval<F> {
+    if n % 2 != 0 {
+        // Odd: monotone increasing.
+        Interval::hull(a.pown_down(n), b.pown_up(n))
     } else {
-        x
-    }
-}
-
-/// A lower bound on `m^k` for finite `m >= 0` and `k >= 1`, by directed
-/// binary exponentiation (every product rounds down, and every operand stays
-/// nonnegative, so the chain never rounds the wrong way).
-fn abs_pow_down<F: RoundFloat>(m: F, k: u32) -> F {
-    if m.is_zero() {
-        return F::ZERO;
-    }
-    if k == 1 {
-        return m;
-    }
-    let mut result = F::ONE;
-    let mut base = m;
-    let mut e = k;
-    while e > 0 {
-        if e & 1 == 1 {
-            result = result.mul_down(base);
-        }
-        e >>= 1;
-        if e > 0 {
-            base = base.mul_down(base);
-        }
-    }
-    result
-}
-
-/// An upper bound on `m^k` for finite `m >= 0` and `k >= 1`, the companion of
-/// [`abs_pow_down`] rounding every product up.
-fn abs_pow_up<F: RoundFloat>(m: F, k: u32) -> F {
-    if m.is_zero() {
-        return F::ZERO;
-    }
-    if k == 1 {
-        return m;
-    }
-    let mut result = F::ONE;
-    let mut base = m;
-    let mut e = k;
-    while e > 0 {
-        if e & 1 == 1 {
-            result = result.mul_up(base);
-        }
-        e >>= 1;
-        if e > 0 {
-            base = base.mul_up(base);
-        }
-    }
-    result
-}
-
-/// A lower bound on `a^k` for an odd `k >= 1` (monotone increasing in `a`),
-/// carrying the sign: `a^k = -|a|^k` for `a < 0`, so a lower bound negates an
-/// upper bound on `|a|^k`.
-fn odd_pow_down<F: RoundFloat>(a: F, k: u32) -> F {
-    let zero = F::ZERO;
-    if a.is_infinite() {
-        // a is the lower endpoint, so only -inf is possible; (-inf)^odd = -inf.
-        return a;
-    }
-    if a.is_zero() {
-        return zero;
-    }
-    if a > zero {
-        abs_pow_down(a, k)
-    } else {
-        abs_pow_up(fabs(a), k).negate()
-    }
-}
-
-/// An upper bound on `b^k` for an odd `k >= 1`, the companion of
-/// [`odd_pow_down`].
-fn odd_pow_up<F: RoundFloat>(b: F, k: u32) -> F {
-    let zero = F::ZERO;
-    if b.is_infinite() {
-        // b is the upper endpoint, so only +inf is possible; (+inf)^odd = +inf.
-        return b;
-    }
-    if b.is_zero() {
-        return zero;
-    }
-    if b > zero {
-        abs_pow_up(b, k)
-    } else {
-        abs_pow_down(fabs(b), k).negate()
-    }
-}
-
-/// The image of `x^k` over `[a, b]` for a positive exponent `k >= 1`.
-fn pos_pown_image<F: RoundFloat>(a: F, b: F, k: u32) -> Interval<F> {
-    let zero = F::ZERO;
-    if k % 2 == 0 {
-        // Even: x^k = |x|^k, driven by the magnitude range over [a, b].
-        let mag_a = if a.is_infinite() {
-            F::INFINITY
-        } else {
-            fabs(a)
-        };
-        let mag_b = if b.is_infinite() {
-            F::INFINITY
-        } else {
-            fabs(b)
-        };
-        let mh = mag_a.rmax(mag_b);
-        let hi = if mh.is_infinite() {
-            F::INFINITY
-        } else {
-            abs_pow_up(mh, k)
-        };
+        // Even: |x|^n, folded through the magnitude range.
+        let hi = a.pown_up(n).rmax(b.pown_up(n));
+        let zero = F::ZERO;
         let lo = if a <= zero && zero <= b {
-            // Zero is attained, and it is the minimum of an even power.
+            // Zero is attained and is the minimum of an even power.
             zero
         } else {
-            let ml = mag_a.rmin(mag_b);
-            if ml.is_infinite() {
-                F::INFINITY
-            } else {
-                abs_pow_down(ml, k)
-            }
+            a.pown_down(n).rmin(b.pown_down(n))
         };
-        Interval::hull(lo.rmax(zero), hi)
-    } else {
-        // Odd: monotone increasing, so the image is the endpoint pair.
-        Interval::hull(odd_pow_down(a, k), odd_pow_up(b, k))
+        Interval::hull(lo, hi)
     }
 }
 
-impl<F: RoundFloat> Interval<F> {
+/// The image of `x^n` over `[a, b]` for a negative exponent `n <= -1`.
+///
+/// Write `m = |n|` and `g(x) = x^n = 1/x^m`. The case table is the parity of
+/// `m` crossed with the position of zero in `[a, b]`, derived from the set
+/// definition. The endpoint powers are correctly rounded negative [`RoundPown`]
+/// calls, so an overflowing magnitude power denormalizes to the subnormal floor
+/// instead of collapsing (the pre-kernel reciprocal-of-the-image defect).
+///
+/// **`m` odd.** `g` has the pole structure of `1/x`: strictly decreasing on each
+/// of `x < 0` and `x > 0`, jumping from `-inf` to `+inf` across zero.
+/// - Zero interior (`a < 0 < b`): the image is all reals, `Entire`.
+/// - `a` is zero, `b > 0` (`[0, b]`): `g` runs from `+inf` down to `b^n`, so
+///   `[pown_down(b, n), +inf]`.
+/// - `b` is zero, `a < 0` (`[a, 0]`): `g` runs from `a^n` down to `-inf`, so
+///   `[-inf, pown_up(a, n)]`.
+/// - Zero absent: `g` is monotone decreasing, so `[pown_down(b, n),
+///   pown_up(a, n)]`.
+///
+/// **`m` even.** `g(x) = 1/|x|^m > 0`, decreasing in `|x|`: the minimum sits at
+/// the larger-magnitude endpoint and the maximum at the smaller, running to
+/// `+inf` when zero (magnitude zero) is attained. `pown(0, n)` for a negative
+/// even `n` is `+inf`, so the larger-magnitude endpoint wins the `rmin`
+/// automatically.
+/// - The lower bound is `min(pown_down(a, n), pown_down(b, n))`.
+/// - The upper bound is `+inf` when zero is in `[a, b]`, else
+///   `max(pown_up(a, n), pown_up(b, n))`.
+///
+/// The point zero (`[0, 0]`), where `0^n` is undefined for `n < 0`, is caught by
+/// the caller as the empty set.
+fn neg_pown_image<F: RoundFloat + RoundPown>(a: F, b: F, n: i32) -> Interval<F> {
+    let zero = F::ZERO;
+    if n % 2 != 0 {
+        // Odd magnitude: the 1/x pole structure.
+        let zero_interior = a < zero && b > zero;
+        if zero_interior {
+            return Interval::entire();
+        }
+        if a.is_zero() {
+            // [0, b], b > 0: g runs from +inf down to b^n.
+            return Interval::hull(b.pown_down(n), F::INFINITY);
+        }
+        if b.is_zero() {
+            // [a, 0], a < 0: g runs from a^n down to -inf.
+            return Interval::hull(F::NEG_INFINITY, a.pown_up(n));
+        }
+        // Zero absent: monotone decreasing.
+        Interval::hull(b.pown_down(n), a.pown_up(n))
+    } else {
+        // Even magnitude: g = 1/|x|^m > 0, decreasing in |x|.
+        let lo = a.pown_down(n).rmin(b.pown_down(n));
+        let hi = if a <= zero && zero <= b {
+            F::INFINITY
+        } else {
+            a.pown_up(n).rmax(b.pown_up(n))
+        };
+        Interval::hull(lo, hi)
+    }
+}
+
+impl<F: RoundFloat + RoundPown> Interval<F> {
     /// The integer power, the set `{ x^n : x in self }` (with `x != 0` when
     /// `n < 0`), for a fixed exponent `n`.
     ///
@@ -468,11 +422,16 @@ impl<F: RoundFloat> Interval<F> {
     /// point zero and the unbounded intervals: `x^0 = 1` everywhere the standard
     /// defines it). For `n > 0` the image follows the parity of `n`: an odd power
     /// is monotone, an even power folds through the magnitude range with the
-    /// minimum at zero when zero is in the input. For `n < 0` the result is the
-    /// set-level reciprocal of the positive-exponent image, so a base straddling
-    /// zero yields the unbounded results [`recip`](Interval::recip) produces
-    /// (`[c, 0]` gives `[-inf, 1/c]`, a zero-straddle gives `Entire`, the point
-    /// zero gives the empty set).
+    /// minimum at zero when zero is in the input. For `n < 0` the image is taken
+    /// endpoint-wise from correctly rounded negative powers under a parity and
+    /// zero-position case analysis: a base straddling
+    /// zero yields the unbounded results `1/x` produces (`[c, 0]` gives
+    /// `[-inf, 1/c]`, a zero-straddle gives `Entire`, the point zero gives the
+    /// empty set), while an overflowing magnitude power denormalizes to the
+    /// subnormal floor rather than collapsing.
+    ///
+    /// Each endpoint power is a [`RoundPown`] call, correctly rounded (tightest)
+    /// for `|n| <= F::POWN_TIGHT_MAX` and a sound bound beyond.
     #[must_use]
     pub fn pown(self, n: i32) -> Self {
         let Some((a, b)) = self.bounds() else {
@@ -482,12 +441,12 @@ impl<F: RoundFloat> Interval<F> {
             return Self::hull(F::ONE, F::ONE);
         }
         if n > 0 {
-            #[allow(clippy::cast_sign_loss)]
-            pos_pown_image(a, b, n as u32)
+            pos_pown_image(a, b, n)
+        } else if a.is_zero() && b.is_zero() {
+            // The point zero: 0^n is undefined for n < 0, so the image is empty.
+            Self::empty()
         } else {
-            // n.unsigned_abs() handles i32::MIN without overflow.
-            let m = n.unsigned_abs();
-            pos_pown_image(a, b, m).recip()
+            neg_pown_image(a, b, n)
         }
     }
 }
@@ -723,7 +682,7 @@ impl<F: RoundFloat + RoundExpBases> DecoratedInterval<F> {
     }
 }
 
-impl<F: RoundFloat> DecoratedInterval<F> {
+impl<F: RoundFloat + RoundPown> DecoratedInterval<F> {
     /// Integer power, decorated. A nonnegative exponent is defined and
     /// continuous everywhere (a polynomial), so it only demotes for an unbounded
     /// input or an overflowed result; a negative exponent is undefined at zero,

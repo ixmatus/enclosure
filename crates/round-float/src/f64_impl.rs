@@ -28,7 +28,7 @@
 
 use crate::{
     RoundExpBases, RoundFloat, RoundHyperbolic, RoundInteger, RoundInverseHyperbolic,
-    RoundInverseTrig, RoundLargestFinite, RoundPow, RoundTranscendental, RoundTrig,
+    RoundInverseTrig, RoundLargestFinite, RoundPow, RoundPown, RoundTranscendental, RoundTrig,
 };
 
 impl RoundFloat for f64 {
@@ -106,6 +106,24 @@ impl RoundFloat for f64 {
 
 impl RoundLargestFinite for f64 {
     const LARGEST_FINITE: Self = f64::MAX;
+}
+
+/// The exact integer power rides the same kernel `TightF64` uses, so the fixture
+/// gains a tight `pown` here. That exceeds the fixture's usual sound-not-tight
+/// doctrine, which is a floor and not a ceiling (round-float decision record
+/// 0004; the `RoundInteger` exact operations set the precedent). Every other
+/// directed operation on the fixture stays deliberately loose.
+impl RoundPown for f64 {
+    const POWN_TIGHT_MAX: u32 = crate::pown_kernel::POWN_TIGHT_MAX;
+
+    #[inline]
+    fn pown_down(self, n: i32) -> Self {
+        crate::pown_kernel::pown_down(self, n)
+    }
+    #[inline]
+    fn pown_up(self, n: i32) -> Self {
+        crate::pown_kernel::pown_up(self, n)
+    }
 }
 
 /// Relative margin that turns `libm`'s faithfully-rounded `exp`/`log` into a

@@ -120,5 +120,6 @@ pub use interval::Interval;
 // functions are gated on.
 pub use round_float::{
     RoundExpBases, RoundFloat, RoundHyperbolic, RoundInteger, RoundInverseHyperbolic,
-    RoundInverseTrig, RoundLargestFinite, RoundPow, RoundReduction, RoundTranscendental, RoundTrig,
+    RoundInverseTrig, RoundLargestFinite, RoundPow, RoundPown, RoundReduction, RoundTranscendental,
+    RoundTrig,
 };

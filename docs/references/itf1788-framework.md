@@ -55,7 +55,8 @@ consumers:
   - crates/interval-1788/tests/conformance_arith_tight.rs (the
     libieeep1788_elem.itl arithmetic testcases, all 1373 vectors bit-exact over
     TightF64; surfaced the division and pown tightness defects enc-ghz and
-    enc-5jj)
+    enc-5jj; the pown gap is now closed by the exact RoundPown kernel, all 163
+    pown vectors bit-exact)
   - crates/interval-1788/tests/conformance_reverse_tight.rs (the arithmetic
     reverse testcases of libieeep1788_rev.itl, libieeep1788_mul_rev.itl, and
     abs_rev.itl, all 995 vectors bit-exact over TightF64; surfaced enc-cov,

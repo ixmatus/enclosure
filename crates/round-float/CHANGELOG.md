@@ -8,6 +8,24 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Added
 
+- `RoundPown`, the integer-power extension trait (`: RoundFloat`): `pown_down`,
+  `pown_up`, and the associated const `POWN_TIGHT_MAX`. Point semantics are IEEE
+  754-2019 `pown` (clause 9.2). Both `f64` backends implement it through one
+  exact private integer kernel: a finite nonzero base decomposes into an integer
+  significand and a power of two, the significand is raised to `|n|` over a
+  fixed-width `u64` limb array with `u128` accumulation (no rounding in the
+  chain), and the result rounds once, from the top 53 bits with a sticky bit for
+  a positive exponent and from an exact long division `2^m / s^|n|` for a
+  negative one. Overflow and subnormal underflow ride exact `i64` exponent
+  arithmetic, so an overflowing magnitude power denormalizes to the subnormal
+  floor rather than collapsing. The result is correctly rounded (tightest) for
+  `1 <= |n| <= 64` and a sound directed bound beyond, where a repeated-squaring
+  fallback runs. The `f64` fixture thereby gains a tight `pown`, a floor the
+  fixture's soundness doctrine permits (the `RoundInteger` precedent). Verified
+  by an astro-float exact-reference property lane (correct rounding in the exact
+  range, soundness past it, the special table) and the interval crate's 163
+  bit-exact pown vectors. Workspace decision record 0007 (erratum), round-float
+  decision record 0004.
 - `RoundInverseTrig`, `RoundInverseHyperbolic`, and `RoundExpBases`, the round-two
   transcendental extension traits (`: RoundFloat`): inverse trigonometric
   functions with the pi enclosure and the two-argument `atan2` (argument order as
