@@ -71,8 +71,10 @@ complete and faithful. Certified today:
 - The arithmetic reverses are bit-exact tightest as decision record 0006
   part 2 promised, except the `pownRev` root family of section 4: `sqrRev`,
   `absRev`, `mulRev` (unary, binary, ternary), the full `mulRevToPair`
-  sign grid including every split and empty-slot row, and `pownRev` for
-  exponents 0, ±1, ±2; 768 vectors.
+  sign grid including every split and empty-slot row and, since 2026-07-22,
+  its decorated grid propagating the division decoration on the first output
+  piece (section 4 item 6), and `pownRev` for exponents 0, ±1, ±2; 943
+  vectors.
 - `mid` at the largest-finite boundary is bit-exact through the
   `RoundLargestFinite` capability (decision record 0009); 7 vectors.
 - `setDec` clamps an inconsistent (interval, decoration) pair to the strongest
@@ -89,8 +91,10 @@ complete and faithful. Certified today:
 
 ## 4. Open items between today and the claim
 
-Each is a tracked bead with a red-when-run ignored test holding the corpus
-datum, so the fix is verified by the lane the day it lands:
+Each open item is a tracked bead with a red-when-run ignored test holding the
+corpus datum, so the fix is verified by the lane the day it lands. Item 6 is
+the first discharged; it is kept in place (not renumbered) with its resolution
+dated:
 
 1. **Division is bit-exact tightest** (resolved 2026-07-22, bead enc-ghz):
    direct directed division rounds each quotient endpoint once; the 56 relocated
@@ -111,13 +115,19 @@ datum, so the fix is verified by the lane the day it lands:
 5. **The decorated surface lacks** numeric accessors, unary predicates, set
    operations, and `isCommonInterval`/`isMember` (bead enc-ks9); the bare
    forms are covered, two via documented compositions.
-6. **The decorated `mulRevToPair` doctrine is unresolved** (bead enc-pzd):
-   the draft-era corpus propagates decorations through the two-output
-   division where this crate grades `trv` per decision record 0006 part 5.
-   All 175 interval values agree bit-exactly; the divergence is
-   decoration-only, and whether the published standard sides with the
-   draft-era reference or with the trv reading is open research against the
-   free proxies. Until settled it is a named divergence, not a defect.
+6. **RESOLVED 2026-07-22: the decorated `mulRevToPair` first piece
+   propagates the division decoration** (bead enc-pzd). The standard requires
+   it: the two-output division sits in its own subclause, and its first output
+   piece is decorated exactly as the normal division `c / b` whenever zero lies
+   outside the divisor `b` (P1788/D8.4 clause 12.12.4, carried into IEEE
+   1788-2015 clause 12.12.3 per the post-ballot record; registry entries
+   `p1788-d8-4-draft` and `p1788-mailing-list-threads`). Only the empty second
+   piece and the genuine zero-straddling split grade `trv`. The corpus was
+   right; the crate had graded every piece `trv` per decision record 0006 part
+   5, whose Errata now records the correction. All 175 decorated vectors pass
+   bit-exact, values and decorations. The `trv` doctrine still stands for the
+   one-output reverse operations, which the standard's non-arithmetic rule
+   covers.
 
 ## 5. Evidence basis and its limits
 

@@ -18,11 +18,11 @@ v1.0; before then the API may break between 0.x releases.
 - The conformance document (`docs/conformance.md`, ledger item 13): the
   per-instantiation claim structure (the claim attaches to `TightF64`, never
   the generic crate), the operation and naming map, the lane's certified
-  totals (2,409 bit-exact vectors, zero soundness violations), the six open
-  items with their beads, the named divergences (values-not-signals, the
-  generic surface, the decorated `mulRevToPair` doctrine question), and the
-  evidence basis with its limits. A living document, dated, that becomes the
-  clause-12 claim at v1.0 and does not retire the README disclosures.
+  totals (2,368 bit-exact vectors, zero soundness violations), the open
+  items with their beads, the named divergences (values-not-signals and the
+  generic surface), and the evidence basis with its limits. A living document,
+  dated, that becomes the clause-12 claim at v1.0 and does not retire the
+  README disclosures.
 
 - The conformance vector lane (bead enc-ac4), split by backend. Over the
   correctly rounded `TightF64` (a dev-dependency; the shipped surface is
@@ -49,10 +49,7 @@ v1.0; before then the API may break between 0.x releases.
   three-ulp brackets for exponent magnitude three and above, 44 vectors
   (enc-cov, an erratum owed to decision record 0006 part 3), and its
   negative-exponent path saturates the set-level reciprocal at the subnormal
-  edge, 8 vectors (enc-ral). The draft-era corpus propagates
-  decorations through the two-output division where decision record 0006
-  part 5 grades `trv`, 175 decoration-only divergences pending a
-  final-standard reading (enc-pzd). The decorated conformance surface lacks
+  edge, 8 vectors (enc-ral). The decorated conformance surface lacks
   numeric accessors, unary predicates, set operations, and
   `isCommonInterval`/`isMember` (enc-ks9). Every non-tight result above is a
   verified sound enclosure; the lane found no soundness violation anywhere
@@ -399,3 +396,13 @@ v1.0; before then the API may break between 0.x releases.
   now demotes `com` to `dac` whenever the assembled interval is unbounded. This
   extends the overflow rule decision record 0004 established for `exp` and `ln`
   to every decorated operation; `mul_add` gains its decorated form here.
+- Decorated `mul_rev_to_pair` now propagates the normal division's decoration
+  on its first output piece instead of grading every piece `trv`. The standard
+  defines the two-output division in its own subclause and requires the first
+  piece to carry the decoration of `c / b` when zero lies outside the divisor
+  `b` (P1788/D8.4 clause 12.12.4, carried into IEEE 1788-2015 clause 12.12.3);
+  only the empty second piece and the genuine zero-straddling split stay `trv`.
+  The previously ignored 175-vector `minimal_mulRevToPair_dec_test` corpus is
+  now asserted and green, values and decorations. Decision record 0006 gains an
+  Errata correcting part 5; the `trv` doctrine still holds for the one-output
+  reverse operations (enc-pzd).

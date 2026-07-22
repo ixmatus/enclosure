@@ -17,6 +17,7 @@ provenance-class: secondary
 consumers:
   - crates/interval-1788/README.md (the "C++ reference" named as behavioral oracle)
   - docs/decisions/0008-reduction-operations-kulisch-accumulator.md (the reduction mode-enum surface witness, surveyed 2026-07-16)
+  - crates/interval-1788/src/reverse.rs (oracle for the decorated `mul_rev_to_pair` first piece decoration doctrine, surveyed 2026-07-22)
 verification:
   - none yet (oracle cross checks are manual; no automated lane)
 sha256: none
@@ -43,3 +44,11 @@ libieeep1788_*.itl files. Paper page snapshot:
 web.archive.org/web/20250422085713/https://ieeexplore.ieee.org/document/6893854.
 Fresh Wayback saves were rate limited on 2026-06-11; recorded snapshots are pre
 existing.
+
+The library's decorated two output division implementation is a behavioral
+witness for the `mulRevToPair` first piece decoration (bead enc-pzd): it takes
+the meet of the two input decorations with trv when zero is in the divisor or
+the piece is empty, com when the piece is bounded nonempty, and dac otherwise,
+which is the normal division's grade the enclosure crate derives independently.
+Oracle only, never a template for code. Impl file snapshot taken 2026-07-22 at
+web.archive.org/web/20260722155731.

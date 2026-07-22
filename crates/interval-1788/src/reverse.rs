@@ -883,13 +883,18 @@ impl<F: RoundFloat + RoundTranscendental> Interval<F> {
 
 // --- Decorated twins --------------------------------------------------------
 //
-// Every reverse operation is a set-level answer that carries no witness that the
-// forward function was defined and continuous on the result, so the standard
-// assigns the decorated reverses no better than `trv`. Each twin therefore
+// A one-output reverse operation is a set-level answer that carries no witness
+// that the forward function was defined and continuous on the result, so the
+// standard's non-arithmetic rule assigns it no better than `trv`. Each such twin
 // returns its bare result decorated `trv`, with `ill` (NaI) propagating: if any
 // operand is NaI the result is NaI, otherwise the decoration is exactly `trv`
-// (its meet with any input decoration). The vendored decorated vectors pin this
-// on every line. See decision record 0006 part 5.
+// (its meet with any input decoration). See decision record 0006 part 5.
+//
+// The two-output reverse division is the exception the standard carves out for
+// itself (clause 12.12.3): its first piece carries the decoration of the normal
+// division whenever zero lies outside the divisor, so `mul_rev_to_pair` grades
+// that piece as division does rather than `trv`. See the decision record's
+// erratum.
 
 use crate::decorated::DecoratedInterval;
 use crate::decoration::Decoration;
@@ -933,18 +938,46 @@ impl<F: RoundFloat> DecoratedInterval<F> {
         dec_rev(nai, self.interval().mul_rev(c.interval(), x.interval()))
     }
 
-    /// The two-output reverse division, decorated: both pieces `trv`, or both
-    /// `NaI` when an operand is `NaI`.
+    /// The two-output reverse division `mulRevToPair`, decorated.
+    ///
+    /// `NaI` in either input poisons both outputs to `NaI`. Otherwise the
+    /// standard grades this operation as its own two-output division rather than
+    /// as a generic reverse (clause 12.12.3): when both inputs are nonempty and
+    /// zero lies outside the divisor `self`, the first piece is exactly the
+    /// normal division `c / self` and carries that division's decoration, namely
+    /// the meet of the two input decorations with the division's local grade
+    /// (`com` on a bounded nonempty piece, `dac` when unbounded); the second
+    /// piece is empty and `trv`. In every other case, zero inside or on the
+    /// boundary of the divisor or an empty input, both pieces are `trv`.
+    ///
+    /// A genuine two-component result arises only when zero is interior to the
+    /// divisor, and then both pieces are `trv`; the propagated decoration shows
+    /// only on a one-component result.
     #[must_use]
     pub fn mul_rev_to_pair(self, c: Self) -> (Self, Self) {
         if self.is_nai() || c.is_nai() {
             return (Self::nai(), Self::nai());
         }
-        let (p1, p2) = self.interval().mul_rev_to_pair(c.interval());
-        (
-            Self::set_dec(p1, Decoration::Trv),
-            Self::set_dec(p2, Decoration::Trv),
-        )
+        let b = self.interval();
+        let (p1, p2) = b.mul_rev_to_pair(c.interval());
+        // The first piece propagates the normal division's decoration exactly
+        // when zero is outside the nonempty divisor and the dividend is nonempty.
+        // `new_dec` supplies the division's local grade (`com` on a bounded
+        // nonempty piece, `dac` when unbounded, `trv` when empty), and the meet
+        // with the input decorations completes the propagation. Zero on the
+        // boundary counts as zero in the divisor, so the closed-interval
+        // `contains` is the right test. Every other case grades `trv`.
+        let first = if !b.is_empty() && !c.interval().is_empty() && !b.contains(F::ZERO) {
+            self.decoration()
+                .meet(c.decoration())
+                .meet(Self::new_dec(p1).decoration())
+        } else {
+            Decoration::Trv
+        };
+        // The second piece is nonempty only on a genuine split (zero interior to
+        // the divisor), where the standard grades it `trv`; otherwise it is
+        // empty, also `trv`.
+        (Self::set_dec(p1, first), Self::set_dec(p2, Decoration::Trv))
     }
 }
 

@@ -254,3 +254,24 @@ is stated once at the module level rather than re-argued per op.
 - Beads: enc-2pw (this design and its implementing half), enc-ac4 (the
   conformance lane that hardens the arithmetic reverses to bit-exact),
   enc-su3 (the conformance document consuming part 1's mapping).
+
+## Errata
+
+**2026-07-22: the decorated vectors do not pin `trv` on every line, and the
+standard does not either.** Part 5 above says every reverse operation grades
+`trv` and that the decorated vectors pin this on every line. The
+`minimal_mulRevToPair_dec_test` corpus refutes both claims: it propagates the
+normal division's decoration through the first output piece whenever zero lies
+outside the divisor, grading it `com`, `dac`, or `def` rather than `trv`. Part
+5's claim survived review because a fixture lane substituted an ADR consistency
+sample for the corpus testcase, so the divergence never reached an assertion
+(bead enc-pzd). The published standard defines the two output division in its
+own subclause, separate from the reverse mode elementary functions, and gives
+its first piece the division decoration (P1788/D8.4 clause 12.12.4, carried into
+IEEE 1788-2015 clause 12.12.3 per the post ballot record; see the registry
+entries `docs/references/p1788-d8-4-draft.md` and
+`docs/references/p1788-mailing-list-threads.md`). The `trv` doctrine stands for
+the one output reverse operations, which the standard's non arithmetic rule
+covers. `mul_rev_to_pair` now grades its first piece as division does; the
+second piece stays `trv`. Per the honesty of the record, the original text above
+stands as written.

@@ -474,7 +474,8 @@ fn mul_rev_to_pair_c_entire() {
     ]);
 }
 
-// --- Decorated: every reverse grades trv, NaI propagates --------------------
+// --- Decorated: the one-output reverses grade trv, NaI propagates; the two-
+// output division propagates the division decoration on its first piece -------
 
 fn di(v: Ivl, d: Decoration) -> DecoratedInterval<f64> {
     DecoratedInterval::set_dec(build(v), d)
@@ -505,9 +506,19 @@ fn mul_rev_to_pair_decorated() {
     piece_encloses(p2.interval(), Some((hx("0X1.999999999999AP-3"), INF)));
     assert!(p1.interval().sup() <= p2.interval().inf());
 
-    // A connected com/com result stays a single trv piece.
+    // A connected com/com result with zero outside the divisor is a single
+    // piece carrying the normal division's decoration: bounded nonempty and
+    // fed by com inputs, so com. The empty second piece stays trv.
     let (p1, p2) = di(Some((-2.0, -0.1)), Decoration::Com)
         .mul_rev_to_pair(di(Some((-2.1, -0.4)), Decoration::Com));
-    assert_eq!(p1.decoration(), Decoration::Trv);
+    assert_eq!(p1.decoration(), Decoration::Com);
+    assert!(p1.interval().is_bounded() && !p1.interval().is_empty());
+    assert_eq!(p2.decoration(), Decoration::Trv);
     assert!(p2.interval().is_empty());
+
+    // Zero on the boundary of the divisor still counts as zero in it, so the
+    // first piece falls back to trv.
+    let (p1, _p2) = di(Some((-2.0, 0.0)), Decoration::Dac)
+        .mul_rev_to_pair(di(Some((-2.1, -0.4)), Decoration::Com));
+    assert_eq!(p1.decoration(), Decoration::Trv);
 }
