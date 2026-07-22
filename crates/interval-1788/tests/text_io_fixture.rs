@@ -11,8 +11,8 @@
 //! `minimal_text_to_decorated_interval_test` (71) in the
 //! `text_to_interval_bare_vectors` / `text_to_decorated_interval_vectors` fns;
 //! `minimal_new_dec_test` (13), `minimal_interval_part_test` (14),
-//! `minimal_set_dec_test` (22, six of them the `#[ignore]`d clamping gap below),
-//! and `minimal_decoration_part_test` (6) in the class-constructor fns.
+//! `minimal_set_dec_test` (22), and `minimal_decoration_part_test` (6) in the
+//! class-constructor fns.
 //!
 //! The remaining unit tests (`exact_representable_anchors`, `keyword_forms`,
 //! `constructor_and_class_valid`, `huge_radius_is_entire`,
@@ -55,14 +55,14 @@
 //! information-loss `IntvlPartOfNaI` signal that the crate does not (the same
 //! value-versus-signal divergence the `UndefinedOperation` cases carry).
 //!
-//! `setDec` has a REQUIRED-OPERATION divergence the conformance lane surfaces:
-//! the standard's `setDec` CLAMPS an inconsistent (interval, decoration) pair
-//! (an empty interval forces `trv`, an unbounded interval demotes `com` to
-//! `dac`), whereas the crate's `set_dec` returns `NaI` for any inconsistent
-//! combination. The 16 consistent vectors pass; the 6 clamping vectors are a
-//! documented `KNOWN GAP` (`set_dec_clamping_divergence_known_gap`, `#[ignore]`d),
-//! asserting the standard datum so the test goes green if the divergence is ever
-//! resolved. No library fix lands in this slice.
+//! `setDec` matches the standard: it CLAMPS an inconsistent (interval,
+//! decoration) pair to the strongest consistent decoration (an empty interval
+//! forces `trv`, an unbounded interval demotes `com` to `dac`), and a request
+//! for `ill` returns `NaI`. All 22 `minimal_set_dec_test` vectors run in the
+//! live `set_dec_vectors` lane. The strict construction from before this change
+//! survives as `try_set_dec`, which returns `None` on an inconsistent pair.
+//! Crate decision record 0007 (bead enc-2hd) records the decision to conform
+//! while keeping a strict variant.
 
 use interval_1788::text_io::{TextError, MAX_EXP_DIGITS, MAX_INPUT_LEN, MAX_SIG_DIGITS};
 use interval_1788::{DecoratedInterval, Decoration, Interval};
@@ -538,8 +538,10 @@ fn decoration_part_vectors() {
 
 #[test]
 fn set_dec_vectors() {
-    // minimal_set_dec_test: 16 of 22 vectors (the 6 clamping vectors are a
-    // documented KNOWN GAP; see set_dec_clamping_divergence_known_gap).
+    // minimal_set_dec_test: 22 vectors. setDec clamps an inconsistent pair to the
+    // strongest consistent decoration (an empty interval forces trv, an unbounded
+    // interval demotes com to dac), and a request for ill returns NaI. Crate
+    // decision record 0007.
     let ok = |s: &str, d: Decoration, want: Decoration| {
         let r = DecoratedInterval::set_dec(p(s), d);
         assert!(!r.is_nai(), "setDec {s} {d:?} unexpectedly NaI");
@@ -607,35 +609,30 @@ fn set_dec_vectors() {
         Decoration::Com,
         Decoration::Com,
     );
+    // The clamping vectors (crate decision record 0007, bead enc-2hd): setDec
+    // weakens an inconsistent (interval, decoration) pair to the strongest
+    // consistent decoration. The interval part is preserved; only the decoration
+    // moves.
+    // setDec [empty] def = [empty]_trv
+    let r = DecoratedInterval::set_dec(Interval::<f64>::empty(), Decoration::Def);
+    assert!(r.interval().is_empty() && r.decoration() == Decoration::Trv);
+    // setDec [empty] dac = [empty]_trv
+    let r = DecoratedInterval::set_dec(Interval::<f64>::empty(), Decoration::Dac);
+    assert!(r.interval().is_empty() && r.decoration() == Decoration::Trv);
+    // setDec [empty] com = [empty]_trv
+    let r = DecoratedInterval::set_dec(Interval::<f64>::empty(), Decoration::Com);
+    assert!(r.interval().is_empty() && r.decoration() == Decoration::Trv);
+    // setDec [1.0,infinity] com = [1.0,infinity]_dac
+    ok("[1.0,+inf]", Decoration::Com, Decoration::Dac);
+    // setDec [-infinity,3.0] com = [-infinity,3.0]_dac
+    ok("[-inf,3.0]", Decoration::Com, Decoration::Dac);
+    // setDec [-infinity,infinity] com = [-infinity,infinity]_dac
+    ok("[-inf,inf]", Decoration::Com, Decoration::Dac);
     // setDec X ill = [nai]: the crate returns NaI (value matches; the
     // UndefinedOperation signal is not raised).
     assert!(DecoratedInterval::set_dec(Interval::<f64>::empty(), Decoration::Ill).is_nai());
     assert!(DecoratedInterval::set_dec(p("[-inf,3.0]"), Decoration::Ill).is_nai());
     assert!(DecoratedInterval::set_dec(p("[-1.0,3.0]"), Decoration::Ill).is_nai());
-}
-
-#[test]
-#[ignore = "KNOWN GAP: set_dec returns NaI for inconsistent combos; the standard's setDec clamps"]
-fn set_dec_clamping_divergence_known_gap() {
-    // minimal_set_dec_test, the 6 clamping vectors. The standard's setDec forces
-    // an empty interval to trv and demotes com to dac on an unbounded interval,
-    // returning a valid decorated interval; the crate's set_dec instead returns
-    // NaI. These assertions hold the STANDARD datum, so the test goes green if the
-    // divergence is ever resolved; today the `!is_nai()` assertions fail, hence
-    // #[ignore]. No library fix lands in this slice. Never adjust expected values.
-    let clamp = |x: Interval<f64>, d: Decoration, want: Decoration| {
-        let r = DecoratedInterval::set_dec(x, d);
-        assert!(!r.is_nai());
-        assert_eq!(r.decoration(), want);
-    };
-    // setDec [empty] {def,dac,com} = [empty]_trv
-    clamp(Interval::empty(), Decoration::Def, Decoration::Trv);
-    clamp(Interval::empty(), Decoration::Dac, Decoration::Trv);
-    clamp(Interval::empty(), Decoration::Com, Decoration::Trv);
-    // setDec [unbounded] com = [unbounded]_dac
-    clamp(p("[1.0,+inf]"), Decoration::Com, Decoration::Dac);
-    clamp(p("[-inf,3.0]"), Decoration::Com, Decoration::Dac);
-    clamp(Interval::entire(), Decoration::Com, Decoration::Dac);
 }
 
 // --- exact anchors against plain f64 literals (independent ground truth) ----

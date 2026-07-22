@@ -75,6 +75,14 @@ complete and faithful. Certified today:
   exponents 0, ±1, ±2; 768 vectors.
 - `mid` at the largest-finite boundary is bit-exact through the
   `RoundLargestFinite` capability (decision record 0009); 7 vectors.
+- `setDec` clamps an inconsistent (interval, decoration) pair to the strongest
+  consistent decoration, matching the standard across all 22
+  `minimal_set_dec_test` vectors. The 6 clamping vectors once parked as a known
+  gap are certified as of 2026-07-22 (decision record 0007, bead enc-2hd),
+  raising the certified count by 6; a strict `try_set_dec` variant stands beside
+  the clamping `set_dec`. These vectors carry a decoration and no rounding, so
+  the certification is independent of the backend and holds at the `TightF64`
+  target.
 - Zero soundness violations exist anywhere in the corpus, on either
   backend: every non-tight result the lane surfaced is a verified sound
   enclosure.
@@ -96,8 +104,10 @@ datum, so the fix is verified by the lane the day it lands:
    record 0006 part 3 carries an erratum obligation for its exactness
    sentence), and its negative-exponent path saturates at the subnormal
    edge (8 vectors, bead enc-ral).
-4. **`set_dec` returns `NaI` where the standard's `setDec` clamps** (6
-   vectors, bead enc-2hd); conform-or-declare is an open decision.
+4. **Resolved 2026-07-22 (decision record 0007):** `set_dec` now clamps an
+   inconsistent pair per the standard's `setDec`, and the strict construction
+   is kept as `try_set_dec` (returns `None` on an inconsistent pair). The 6
+   vectors join the live `set_dec_vectors` lane (bead enc-2hd).
 5. **The decorated surface lacks** numeric accessors, unary predicates, set
    operations, and `isCommonInterval`/`isMember` (bead enc-ks9); the bare
    forms are covered, two via documented compositions.

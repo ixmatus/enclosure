@@ -193,15 +193,59 @@ impl<F: RoundFloat> DecoratedInterval<F> {
         Self { x, d }
     }
 
-    /// Pair an interval with an explicit decoration, or return [`nai`](DecoratedInterval::nai)
-    /// if the combination is inconsistent (for example `com` with an unbounded
-    /// interval, or `ill` with a nonempty one).
+    /// Pair an interval with an explicit decoration, clamping an inconsistent
+    /// pair down to the strongest decoration the interval can carry, exactly as
+    /// the standard's `setDec`. This is the total conforming constructor: it
+    /// returns a valid decorated interval for every `(x, d)`.
+    ///
+    /// The clamp only ever weakens `d`; it never strengthens it. [`new_dec`](DecoratedInterval::new_dec)
+    /// gives the strongest decoration `x` admits (`com` for a bounded nonempty
+    /// interval, `dac` for an unbounded nonempty one, `trv` for the empty
+    /// interval), and the lattice [`meet`](Decoration::meet) lowers `d` to it:
+    ///
+    /// - a consistent pair passes through unchanged, since `d` already sits at or
+    ///   below the strongest and the meet returns `d`;
+    /// - `com` on an unbounded interval clamps to `dac`, because `com` promises a
+    ///   bounded result the unbounded interval cannot honor (the same demotion
+    ///   the `pack` seam applies to an overflowed operation result);
+    /// - every decoration other than `ill` on the empty interval clamps to
+    ///   `trv`, because `com`, `dac`, and `def` each assert a nonempty interval;
+    /// - `ill` decorates `NaI` alone. The standard treats a request for `ill` as
+    ///   an attempt to construct `NaI` and raises `UndefinedOperation`; this
+    ///   crate reports that as the returned `NaI` value. So `set_dec(_, ill)` is
+    ///   `NaI` whether or not the interval is empty, and `ill` never decorates
+    ///   the given interval.
+    ///
+    /// Reach for [`try_set_dec`](DecoratedInterval::try_set_dec) instead when an
+    /// inconsistent pair should surface as a visible error rather than a silent
+    /// weakening: it returns `None` on exactly the pairs this constructor clamps.
     #[must_use]
     pub fn set_dec(x: Interval<F>, d: Decoration) -> Self {
+        if d == Decoration::Ill {
+            return Self::nai();
+        }
+        let d = d.meet(Self::new_dec(x).decoration());
+        Self { x, d }
+    }
+
+    /// The strict counterpart of [`set_dec`](DecoratedInterval::set_dec): pair an
+    /// interval with an explicit decoration only when the pair is already
+    /// consistent, returning `None` for any inconsistent combination instead of
+    /// clamping. This constructor makes misuse visible; the `None` is a signal
+    /// in the type a caller can match on, in place of a poisoned `NaI` value.
+    ///
+    /// A pair is consistent when `com` carries a bounded nonempty interval, `dac`
+    /// and `def` carry a nonempty interval, `ill` carries the empty interval (the
+    /// `NaI`), and `trv` carries any interval. So `try_set_dec(x, ill)` is
+    /// `Some(nai())` when `x` is empty and `None` otherwise. Wherever
+    /// [`set_dec`](DecoratedInterval::set_dec) would weaken the decoration, this
+    /// returns `None`.
+    #[must_use]
+    pub fn try_set_dec(x: Interval<F>, d: Decoration) -> Option<Self> {
         if valid_combo(x, d) {
-            Self { x, d }
+            Some(Self { x, d })
         } else {
-            Self::nai()
+            None
         }
     }
 
@@ -799,20 +843,46 @@ mod tests {
     }
 
     #[test]
-    fn set_dec_rejects_inconsistent_combinations() {
-        // com with an unbounded interval is inconsistent -> NaI.
-        let bad = DecoratedInterval::set_dec(
-            Interval::<f64>::new(0.0, f64::INFINITY).unwrap(),
-            Decoration::Com,
+    fn set_dec_clamps_and_try_set_dec_is_strict() {
+        let unbounded = Interval::<f64>::new(0.0, f64::INFINITY).unwrap();
+        let bounded = Interval::<f64>::new(1.0, 2.0).unwrap();
+
+        // set_dec conforms: com on an unbounded interval clamps to dac.
+        let clamped = DecoratedInterval::set_dec(unbounded, Decoration::Com);
+        assert!(!clamped.is_nai());
+        assert_eq!(clamped.interval(), unbounded);
+        assert_eq!(clamped.decoration(), Decoration::Dac);
+
+        // A decoration other than ill on the empty interval clamps to trv.
+        let empty_clamped = DecoratedInterval::set_dec(Interval::<f64>::empty(), Decoration::Com);
+        assert!(!empty_clamped.is_nai());
+        assert!(empty_clamped.interval().is_empty());
+        assert_eq!(empty_clamped.decoration(), Decoration::Trv);
+
+        // ill collapses to NaI whether or not the interval is empty.
+        assert!(DecoratedInterval::set_dec(bounded, Decoration::Ill).is_nai());
+        assert!(DecoratedInterval::set_dec(Interval::<f64>::empty(), Decoration::Ill).is_nai());
+
+        // A consistent pair passes through unchanged.
+        let kept = DecoratedInterval::set_dec(bounded, Decoration::Def);
+        assert_eq!(kept.decoration(), Decoration::Def);
+
+        // try_set_dec is strict: None on exactly the pairs set_dec clamps.
+        assert!(DecoratedInterval::try_set_dec(unbounded, Decoration::Com).is_none());
+        assert!(
+            DecoratedInterval::try_set_dec(Interval::<f64>::empty(), Decoration::Com).is_none()
         );
-        assert!(bad.is_nai());
-        // ill with a nonempty interval is inconsistent -> NaI.
-        let bad2 =
-            DecoratedInterval::set_dec(Interval::<f64>::new(1.0, 2.0).unwrap(), Decoration::Ill);
-        assert!(bad2.is_nai());
-        // A consistent combination is kept.
-        let ok =
-            DecoratedInterval::set_dec(Interval::<f64>::new(1.0, 2.0).unwrap(), Decoration::Def);
-        assert_eq!(ok.decoration(), Decoration::Def);
+        assert!(DecoratedInterval::try_set_dec(bounded, Decoration::Ill).is_none());
+        // A consistent pair is Some, and empty+ill is the strict NaI.
+        assert_eq!(
+            DecoratedInterval::try_set_dec(bounded, Decoration::Def)
+                .map(DecoratedInterval::decoration),
+            Some(Decoration::Def)
+        );
+        assert!(
+            DecoratedInterval::try_set_dec(Interval::<f64>::empty(), Decoration::Ill)
+                .unwrap()
+                .is_nai()
+        );
     }
 }
