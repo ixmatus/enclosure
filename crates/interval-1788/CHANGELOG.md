@@ -38,9 +38,8 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Known issues, surfaced by the lane and tracked as beads
 
-- Interval division is `a * recip(b)`, one rounding looser than the tightest
-  quotient on 56 vectors (enc-ghz); `pown`'s repeated squaring is loose for
-  exponent magnitude three and above, and its negative-power overflow path
+- `pown`'s repeated squaring is loose for exponent magnitude three and above,
+  and its negative-power overflow path
   collapses near the subnormal edge, 41 vectors (enc-5jj, falsifying the
   workspace decision record 0007's assumption that the corpus could not
   distinguish chain tightness). `pown_rev`'s root bisection leaves one-to-
@@ -348,6 +347,21 @@ v1.0; before then the API may break between 0.x releases.
   module moved out; nothing in the family used it.
 
 ### Fixed
+
+- Interval division is bit-exact tightest. `a / b` was `a * recip(b)`, the
+  four-corner product of the dividend and the reciprocal, two directed roundings
+  where the standard's tightest accuracy admits one; the second rounding lost a
+  unit in the last place on an inexact quotient, so 56 corpus vectors enclosed the
+  tight result one ulp loose per affected endpoint (`[-30, -15] / [-5, -3]` came
+  back `[2.999..., 10.000...]` for the exact `[3, 10]`). Division now rounds each
+  quotient endpoint once through the backend's directed division, selecting the
+  corner that attains the bound from the divisor's sign, and the zero-divisor
+  cases (empty, half-lines, the whole line) fall out with exact endpoints and no
+  reciprocal. The sign-cased core is shared with the reverse-division path so the
+  forward and reverse quotients cannot drift. The 56 relocated conformance vectors
+  are folded back into `minimal_div_test`; all 341 `div` rows are bit-exact over
+  `TightF64`, and a property lane checks soundness on sampled points and that the
+  new result is a subset of the old reciprocal composition (bead enc-ghz).
 
 - Decorated `+`, `-`, `*`, `/`, `recip`, `sqr`, `sqrt`, and `mul_add` no longer
   pack `com` with an overflowed unbounded result. A bounded operation can reach
