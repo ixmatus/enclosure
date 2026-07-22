@@ -20,9 +20,15 @@ to instantiations, never to the generic crate:
 - **`Interval<TightF64>` and `DecoratedInterval<TightF64>`** (the correctly
   rounded binary64 backend from round-float's `f64-tight` feature) are the
   conformance target: the set-based flavor over the binary64 inf-sup Level 2
-  type. Today this instantiation demonstrates bit-exact tightest results on
-  2,409 corpus vectors across the arithmetic and arithmetic-reverse
-  operations, with the open items of section 4 standing between it and the
+  type. As of 2026-07-22 this instantiation demonstrates bit-exact tightest
+  results on all 2,368 corpus vectors the tight lanes transcribe (1,373
+  arithmetic, 995 arithmetic-reverse; section 3 is the accounting), under two
+  named accuracy bounds: integer powers and their reverse roots are correctly
+  rounded for exponent magnitude at most `RoundPown::POWN_TIGHT_MAX` (64) and
+  sound beyond, and the negative-exponent reverse root at the
+  subnormal-overflow edge holds the reference's directed composition, the
+  value the corpus itself pins (decision record 0006 errata). Section 4's one
+  open item, the `mid` nearest-rounding datum, stands between this and the
   full claim.
 - **`Interval<f64>` over the fixture** (round-float's `f64` feature) is
   deliberately sound-not-tight: every result encloses, transcendentals carry
@@ -56,25 +62,28 @@ mappings recorded once here and in the rustdoc:
   vectors, so its correctness rests on the designed round-trip property
   lanes, and this document says so rather than implying vector coverage.
 
-## 3. What the conformance lane certified (2026-07-19)
+## 3. What the conformance lane certified (2026-07-19, extended 2026-07-22)
 
 The in-tree lane hand-translates the ITF1788 corpus and asserts it bit-exact
 over `TightF64`. Two adversarial audits (coverage: corpus statements against
 transcriptions, per testcase; fidelity: bit-level re-derivation, an oracle
 check of the hex parser over all 198 literals in use, and verification that
 every ignored lane asserts corpus data) confirmed the transcriptions
-complete and faithful. Certified today:
+complete and faithful. The wave that closed the open items ran both audits
+again against the integrated tree: a per-testcase coverage recount, and an
+independent hex re-parse of all 341 division and 163 pown rows, the
+signed-zero vectors, and every ignored twin. Certified today:
 
 - Single-rounding arithmetic is bit-exact tightest: `pos`, `neg`, `add`,
   `sub`, `mul`, `div`, `recip`, `sqr`, `sqrt`, `fma`, and `pown`, every row
   of every testcase; 1,373 vectors.
 - The arithmetic reverses are bit-exact tightest as decision record 0006
-  part 2 promised, except the `pownRev` root family of section 4: `sqrRev`,
-  `absRev`, `mulRev` (unary, binary, ternary), the full `mulRevToPair`
-  sign grid including every split and empty-slot row and, since 2026-07-22,
-  its decorated grid propagating the division decoration on the first output
-  piece (section 4 item 6), and `pownRev` for exponents 0, ±1, ±2; 943
-  vectors.
+  part 2 promised: `sqrRev`, `absRev`, `mulRev` (unary, binary, ternary), the
+  full `mulRevToPair` sign grid including every split and empty-slot row and,
+  since 2026-07-22, its decorated grid propagating the division decoration on
+  the first output piece (section 4 item 6), and the full `pownRev` root
+  family through the `RoundPown` neighbor certification (section 4 item 3);
+  995 vectors.
 - `mid` at the largest-finite boundary is bit-exact through the
   `RoundLargestFinite` capability (decision record 0009); 7 vectors.
 - `setDec` clamps an inconsistent (interval, decoration) pair to the strongest
@@ -115,10 +124,9 @@ Total: 96 + 48 + 61 + 47 + 10 = 262 statements.
 
 ## 4. Open items between today and the claim
 
-Each open item is a tracked bead with a red-when-run ignored test holding the
-corpus datum, so the fix is verified by the lane the day it lands. Item 6 is
-the first discharged; it is kept in place (not renumbered) with its resolution
-dated:
+Every item the lane surfaced is resolved as of 2026-07-22, each kept in place
+(not renumbered) with its resolution dated. One new item, surfaced by this
+wave's own verification rather than by the lane, is open (item 7):
 
 1. **Division is bit-exact tightest** (resolved 2026-07-22, bead enc-ghz):
    direct directed division rounds each quotient endpoint once; the 56 relocated
@@ -160,6 +168,17 @@ dated:
    bit-exact, values and decorations. The `trv` doctrine still stands for the
    one-output reverse operations, which the standard's non-arithmetic rule
    covers.
+7. **OPEN: `mid` does not compute the Level 2 nearest datum** (bead enc-5p3).
+   The standard's Level 2 `mid` is roundTiesToEven of the exact midpoint; the
+   crate computes a directed halved sum, which drops subnormal halving
+   remainders on any backend, landing an ulp low even where the exact midpoint
+   is representable (`mid([2^-1074, 3 * 2^-1074])` computes `2^-1074`; the
+   corpus pins `2 * 2^-1074`). The fix is a design decision (a nearest-halving
+   backend capability, a documented divergence, or a directed derivation with
+   an explicit tie break), not a test promotion; the falsified promotion
+   premise is recorded in the bead. The 16 fixture-loose mid/rad/midRad
+   vectors stay in ignored twins holding the corpus datum; the largest-finite
+   boundary and the symmetric and singleton cases stay certified.
 
 ## 5. Evidence basis and its limits
 
