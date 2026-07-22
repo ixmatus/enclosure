@@ -8,6 +8,13 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Added
 
+- `DecoratedInterval::try_set_dec`, the strict constructor. It pairs an interval
+  with a decoration only when the pair is consistent, returning
+  `Option<DecoratedInterval<F>>` with `None` on an inconsistent pair rather than
+  clamping. It preserves the construction `set_dec` performed before this
+  change, now as an explicit signal in the type. Crate decision record 0007
+  (bead enc-2hd).
+
 - The conformance document (`docs/conformance.md`, ledger item 13): the
   per-instantiation claim structure (the claim attaches to `TightF64`, never
   the generic crate), the operation and naming map, the lane's certified
@@ -47,8 +54,7 @@ v1.0; before then the API may break between 0.x releases.
   three-ulp brackets for exponent magnitude three and above, 44 vectors
   (enc-cov, an erratum owed to decision record 0006 part 3), and its
   negative-exponent path saturates the set-level reciprocal at the subnormal
-  edge, 8 vectors (enc-ral). `set_dec` returns NaI where the standard's
-  `setDec` clamps, 6 vectors (enc-2hd). The draft-era corpus propagates
+  edge, 8 vectors (enc-ral). The draft-era corpus propagates
   decorations through the two-output division where decision record 0006
   part 5 grades `trv`, 175 decoration-only divergences pending a
   final-standard reading (enc-pzd). The decorated conformance surface lacks
@@ -324,6 +330,16 @@ v1.0; before then the API may break between 0.x releases.
     the bare interval matches the undecorated operation.
 
 ### Changed
+
+- `DecoratedInterval::set_dec` now clamps an inconsistent (interval, decoration)
+  pair to the strongest consistent decoration, matching the standard's `setDec`:
+  an empty interval forces `trv`, an unbounded interval demotes `com` to `dac`,
+  and a request for `ill` returns `NaI`. It previously returned `NaI` for any
+  inconsistent pair, so this changes the semantics for existing callers; the
+  strict behavior is available as the new `try_set_dec`. The change closes the
+  six `minimal_set_dec_test` clamping vectors (bead enc-2hd) and is recorded in
+  crate decision record 0007. Every caller within the crate passes a decoration
+  consistent by construction, so none changes behavior.
 
 - `mid`, `rad`, and `mid_rad` now sit behind the `RoundLargestFinite` capability
   bound and follow IEEE 1788's Level 2 realmax convention on half-unbounded
