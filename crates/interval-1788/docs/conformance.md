@@ -127,11 +127,17 @@ dated:
    looseness and the negative-power overflow collapse are fixed by the exact
    `RoundPown` integer kernel (bead enc-5jj, round-float decision record 0004);
    all 163 pown vectors now pass bit-exact.
-3. **`pownRev`'s root bisection** leaves one-to-three-ulp brackets for
-   exponent magnitude three and above (44 vectors, bead enc-cov; decision
-   record 0006 part 3 carries an erratum obligation for its exactness
-   sentence), and its negative-exponent path saturates at the subnormal
-   edge (8 vectors, bead enc-ral).
+3. **`pownRev`'s root family (resolved 2026-07-22):** the root bisection left
+   one-to-three-ulp brackets for exponent magnitude three and above (bead
+   enc-cov) and the negative-exponent path saturated its set-level reciprocal
+   at the subnormal edge (bead enc-ral). Both are fixed on the exact `RoundPown`
+   integer kernel (round-float decision record 0004; decision record 0006
+   erratum): the positive-exponent root ends in a neighbor certification and is
+   correctly rounded, and the negative path roots first then reciprocates at the
+   scalar level (correctly rounded where the constraint reciprocal is
+   representable, matching the reference's directed composition at the subnormal
+   overflow edge). All `pownRev` vectors now pass bit-exact: +52 to the
+   certified reverse subtotal of section 3.
 4. **Resolved 2026-07-22 (decision record 0007):** `set_dec` now clamps an
    inconsistent pair per the standard's `setDec`, and the strict construction
    is kept as `try_set_dec` (returns `None` on an inconsistent pair). The 6

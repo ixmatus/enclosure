@@ -544,8 +544,8 @@ fn abs_rev_bin_absrevitl_test() {
 // pownRev  (libieeep1788_rev.itl)
 // ============================================================================
 
-/// The `minimal_pown_rev_test` corpus (143 vectors), shared by the running
-/// bit-exact lane [`pown_rev_test`] and the KNOWN DEFECT/GAP lanes.
+/// The `minimal_pown_rev_test` corpus (143 vectors), asserted bit-exact by the
+/// running lane [`pown_rev_test`].
 fn pown_bare_cases() -> Vec<(E, i32, E)> {
     vec![
         // n = 0
@@ -1659,133 +1659,56 @@ fn pown_dec_bin_cases() -> Vec<(Decoration, E, Decoration, E, i32, E)> {
     ]
 }
 
-// The pownRev corpora split into a running bit-exact lane and two `#[ignore]`
-// analysis lanes. Over `TightF64` the `nth_root_bounds` bit-bisection
-// (ADR-0006 part 3) does NOT reproduce the corpus's correctly-rounded roots for
-// exponents with |n| >= 3: the straddle exit leaves a 1-3 ulp bracket, so the
-// result is a SOUND over-enclosure but not the tightest representable, and
-// negative exponents inherit it through the reciprocal. Exponents n = 0, +-1
-// (identity), +-2 (the geometric phase nails square roots), and all structural
-// cases ARE bit-exact. Two failure classes, both isolated to pownRev:
+// The pownRev corpora are one running bit-exact lane per corpus, no carve-outs.
+// Over `TightF64` the `pown_rev` roots ride the exact `RoundPown` kernel and end
+// in a neighbor certification (round-float decision record 0004; ADR-0006
+// erratum 2026-07-22), so every row is the tightest representable pair. The two
+// classes ADR-0006 part 3 had left `#[ignore]` are resolved (beads enc-cov,
+// enc-ral):
 //
-//  * DEFECT (44 vectors): the loose root itself. A minimized reproducer:
-//      `iv(0.0, hx("0X1.A87587109655P+66")).pown_rev(entire(), 8)` yields sup
-//      0x407444cccccccccf, one ulp above the corpus's 0x407444ccccccccce; the
-//      true 8th root of the endpoint rounds to `...cce`, so `...ccf` is sound
-//      but not tightest. This contradicts ADR-0006 part 3's "over TightF64 it
-//      is exact"; it is a fixable library defect (a correctly-rounded final
-//      step in `nth_root_bounds`), fixed elsewhere, not in this slice.
-//  * GAP (8 vectors): negative-odd exponent whose constraint reaches a
-//      subnormal, e.g. `iv(0.0, 5e-324).pown_rev(entire(), -3)`. The set-level
-//      reciprocal of `[0, 2^-1074]` is `[2^1074, inf)`, but `2^1074` overflows
-//      to `f64::MAX`, so the subsequent cube root lands at ~2^341 instead of
-//      the corpus's 2^358: a catastrophic (though still SOUND) enclosure loss.
-//      This is ADR-0006 part 3's own flagged consideration (negative exponents
-//      route through the set-level reciprocal); closing it needs a two-piece
-//      negative-exponent path, a design question this slice only certifies.
-//
-// The indices below name the carved rows in each corpus (0-based).
-const PB_DEFECT: &[usize] = &[
-    43, 44, 45, 46, 52, 59, 60, 61, 67, 68, 69, 74, 75, 76, 85, 98, 100, 127, 134, 141, 142,
-];
-const PB_GAP: &[usize] = &[121, 122, 135, 136];
-const PBIN_DEFECT: &[usize] = &[20];
-const PD_DEFECT: &[usize] = &[
-    42, 43, 44, 45, 51, 58, 59, 60, 66, 67, 68, 73, 74, 75, 84, 97, 99, 126, 133, 140, 141,
-];
-const PD_GAP: &[usize] = &[120, 121, 134, 135];
-const PDBIN_DEFECT: &[usize] = &[19];
+//  * The root looseness for |n| >= 3 (once 44 vectors). The minimized case,
+//    `iv(0.0, hx("0X1.A87587109655P+66")).pown_rev(entire(), 8)`, now yields the
+//    corpus's sup `0x407444ccccccccce` (was one ulp high at `...ccf`): the
+//    certification walks the bracket to the two adjacent floats the corpus
+//    pins.
+//  * The negative-exponent subnormal edge (once 8 vectors). The negative path
+//    roots first then reciprocates at the scalar level, so
+//    `iv(0.0, 5e-324).pown_rev(entire(), -3)` reaches `2^358` (was `~2^341`, the
+//    saturated set-level reciprocal). Where the constraint reciprocal is
+//    representable the pair is certified tightest; where it overflows the
+//    directed root-then-reciprocal seed stands, matching the reference's own
+//    `rootn` at that edge (the corpus pins that value, one ulp inside the
+//    tightest floor for a non-power-of-two root such as `2^(1074/7)`).
 
-// minimal_pown_rev_test: 143 vectors (118 asserted bit-exact here; 21 to the
-// KNOWN DEFECT lane, 4 to the KNOWN GAP lane).
+// minimal_pown_rev_test: 143 vectors, all bit-exact.
 #[test]
 fn pown_rev_test() {
-    for (i, (c, n, w)) in pown_bare_cases().into_iter().enumerate() {
-        if PB_DEFECT.contains(&i) || PB_GAP.contains(&i) {
-            continue;
-        }
+    for (c, n, w) in pown_bare_cases() {
         eq(build(c).pown_rev(entire(), n), w);
     }
 }
 
-// minimal_pown_rev_bin_test: 37 vectors (36 bit-exact here; 1 to KNOWN DEFECT).
+// minimal_pown_rev_bin_test: 37 vectors, all bit-exact.
 #[test]
 fn pown_rev_bin_test() {
-    for (i, (c, x, n, w)) in pown_bin_cases().into_iter().enumerate() {
-        if PBIN_DEFECT.contains(&i) {
-            continue;
-        }
+    for (c, x, n, w) in pown_bin_cases() {
         eq(build(c).pown_rev(build(x), n), w);
     }
 }
 
-// minimal_pown_rev_dec_test: 142 vectors (117 bit-exact here; 21 to KNOWN
-// DEFECT, 4 to KNOWN GAP).
+// minimal_pown_rev_dec_test: 142 vectors, all bit-exact.
 #[test]
 fn pown_rev_dec_test() {
-    for (i, (cd, c, n, w)) in pown_dec_cases().into_iter().enumerate() {
-        if PD_DEFECT.contains(&i) || PD_GAP.contains(&i) {
-            continue;
-        }
+    for (cd, c, n, w) in pown_dec_cases() {
         eq_trv(dec(c, cd).pown_rev(new_dec(ENT), n), w);
     }
 }
 
-// minimal_pown_rev_dec_bin_test: 36 vectors (35 bit-exact here; 1 to KNOWN
-// DEFECT).
+// minimal_pown_rev_dec_bin_test: 36 vectors, all bit-exact.
 #[test]
 fn pown_rev_dec_bin_test() {
-    for (i, (cd, c, xd, x, n, w)) in pown_dec_bin_cases().into_iter().enumerate() {
-        if PDBIN_DEFECT.contains(&i) {
-            continue;
-        }
+    for (cd, c, xd, x, n, w) in pown_dec_bin_cases() {
         eq_trv(dec(c, cd).pown_rev(dec(x, xd), n), w);
-    }
-}
-
-// KNOWN DEFECT (44 vectors across the four pownRev corpora): `nth_root_bounds`
-// is 1-3 ulps loose for |n| >= 3. Asserts bit-exact, so it is red when run;
-// un-ignore once the root bisection is made correctly-rounded.
-#[test]
-#[ignore = "KNOWN DEFECT: pownRev nth_root_bounds loose by 1-3 ulps for |n|>=3 (sound over-enclosure); see module docs"]
-fn pown_rev_loose_root_known_defect() {
-    for (i, (c, n, w)) in pown_bare_cases().into_iter().enumerate() {
-        if PB_DEFECT.contains(&i) {
-            eq(build(c).pown_rev(entire(), n), w);
-        }
-    }
-    for (i, (c, x, n, w)) in pown_bin_cases().into_iter().enumerate() {
-        if PBIN_DEFECT.contains(&i) {
-            eq(build(c).pown_rev(build(x), n), w);
-        }
-    }
-    for (i, (cd, c, n, w)) in pown_dec_cases().into_iter().enumerate() {
-        if PD_DEFECT.contains(&i) {
-            eq_trv(dec(c, cd).pown_rev(new_dec(ENT), n), w);
-        }
-    }
-    for (i, (cd, c, xd, x, n, w)) in pown_dec_bin_cases().into_iter().enumerate() {
-        if PDBIN_DEFECT.contains(&i) {
-            eq_trv(dec(c, cd).pown_rev(dec(x, xd), n), w);
-        }
-    }
-}
-
-// KNOWN GAP (8 vectors): negative-odd pownRev through the saturating set-level
-// reciprocal on a subnormal-reaching constraint. Asserts bit-exact, red when
-// run; un-ignore once the two-piece negative-exponent path exists.
-#[test]
-#[ignore = "KNOWN GAP: negative-odd pownRev reciprocal saturates at f64::MAX on subnormal constraints; see module docs"]
-fn pown_rev_subnormal_recip_known_gap() {
-    for (i, (c, n, w)) in pown_bare_cases().into_iter().enumerate() {
-        if PB_GAP.contains(&i) {
-            eq(build(c).pown_rev(entire(), n), w);
-        }
-    }
-    for (i, (cd, c, n, w)) in pown_dec_cases().into_iter().enumerate() {
-        if PD_GAP.contains(&i) {
-            eq_trv(dec(c, cd).pown_rev(new_dec(ENT), n), w);
-        }
     }
 }
 
