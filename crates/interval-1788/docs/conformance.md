@@ -9,7 +9,7 @@ analysis of the test corpus concluded the vectors strengthen evidence
 without retiring those disclosures, and this document inherits that
 conclusion.
 
-**Date of the statements below:** 2026-07-20.
+**Date of the statements below:** 2026-07-22.
 
 ## 1. What is claimed, and to what
 
@@ -66,8 +66,8 @@ every ignored lane asserts corpus data) confirmed the transcriptions
 complete and faithful. Certified today:
 
 - Single-rounding arithmetic is bit-exact tightest: `pos`, `neg`, `add`,
-  `sub`, `mul`, `recip`, `sqr`, `sqrt`, `fma`, and the in-budget `div` and
-  `pown` rows; 1,276 vectors.
+  `sub`, `mul`, `recip`, `sqr`, `sqrt`, `fma`, the full `div` rows, and the
+  in-budget `pown` rows; 1,332 vectors.
 - The arithmetic reverses are bit-exact tightest as decision record 0006
   part 2 promised, except the `pownRev` root family of section 4: `sqrRev`,
   `absRev`, `mulRev` (unary, binary, ternary), the full `mulRevToPair`
@@ -84,8 +84,9 @@ complete and faithful. Certified today:
 Each is a tracked bead with a red-when-run ignored test holding the corpus
 datum, so the fix is verified by the lane the day it lands:
 
-1. **Division is one rounding looser than tightest** on 56 vectors
-   (`a * recip(b)`; bead enc-ghz). Fix: direct directed division.
+1. **Division is bit-exact tightest** (resolved 2026-07-22, bead enc-ghz):
+   direct directed division rounds each quotient endpoint once; the 56 relocated
+   vectors are folded back and all 341 `div` rows pass in `minimal_div_test`.
 2. **`pown` is looser than tightest** for exponent magnitude three and
    above, and its negative-power overflow path collapses near the subnormal
    edge; 41 vectors (bead enc-5jj).

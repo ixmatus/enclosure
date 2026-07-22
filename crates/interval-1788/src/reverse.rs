@@ -51,6 +51,7 @@
 //! loss.
 
 use crate::interval::Interval;
+use crate::ops::odiv;
 use round_float::{RoundFloat, RoundInverseHyperbolic, RoundInverseTrig, RoundTranscendental};
 
 // --- Shared helpers ---------------------------------------------------------
@@ -230,29 +231,6 @@ fn signed_root_bounds<F: RoundFloat>(v: F, n: u32) -> (F, F) {
         (u.negate(), d.negate())
     } else {
         nth_root_bounds(v, n)
-    }
-}
-
-/// Ordinary interval division `c / b` with `0` not in `b`, by directed division
-/// on the sign-selected corners (never `inf / inf`).
-fn odiv<F: RoundFloat>(c1: F, c2: F, b1: F, b2: F) -> Interval<F> {
-    let zero = F::ZERO;
-    if b1 > zero {
-        // b > 0.
-        let lo = if c1 >= zero {
-            c1.div_down(b2)
-        } else {
-            c1.div_down(b1)
-        };
-        let hi = if c2 >= zero {
-            c2.div_up(b1)
-        } else {
-            c2.div_up(b2)
-        };
-        Interval::hull(lo, hi)
-    } else {
-        // b < 0: c / b = -(c / (-b)), and -b is positive.
-        -odiv(c1, c2, b2.negate(), b1.negate())
     }
 }
 

@@ -46,16 +46,12 @@
 //!
 //! # Known defects surfaced by this lane
 //!
-//! Of the 1373 vectors, 97 fail bit-exact conformance and are relocated to two
-//! ignored `_known_defect` tests, each asserting the corpus (tight) value so an
+//! Of the 1373 vectors, 41 fail bit-exact conformance and are relocated to one
+//! ignored `_known_defect` test, asserting the corpus (tight) value so an
 //! eventual fix is un-ignored and validated. Every relocated vector is a SOUND
 //! enclosure of the corpus result (verified: the library interval contains the
 //! tight interval); the losses are tightness, never soundness.
 //!
-//! - `minimal_div_test_known_defect` (56): `Interval / Interval` is
-//!   `self * rhs.recip()`, two directed roundings where a directly rounded
-//!   quotient is tighter (e.g. `[-30,-15] / [-5,-3]` is exactly `[3,10]` but the
-//!   reciprocal path yields `[2.999...6, 10.000...2]`).
 //! - `minimal_pown_test_known_defect` (41): `Interval::pown` raises to a power by
 //!   repeated squaring with a directed rounding per multiply (loose for
 //!   `|n| >= 3`) and computes negative powers as `pos_pown_image(a,b,|n|).recip()`
@@ -64,11 +60,11 @@
 //!   eight overflow vectors also pin the zero-endpoint sign and are asserted with
 //!   [`eq_bits`].
 //!
-//! Every other testcase (`pos`, `neg`, `add`, `sub`, `mul`, `recip`, `sqr`,
-//! `sqrt`, `fma`, all decorated blocks, and the 285/122 tight `div`/`pown`
-//! vectors) is bit-exact over `TightF64`, which is the positive evidence: the
-//! backend is correctly rounded and the interval operations that round once per
-//! endpoint are tightest.
+//! Every other testcase (`pos`, `neg`, `add`, `sub`, `mul`, `div`, `recip`,
+//! `sqr`, `sqrt`, `fma`, all decorated blocks, and the 122 tight `pown` vectors)
+//! is bit-exact over `TightF64`, which is the positive evidence: the backend is
+//! correctly rounded and the interval operations that round once per endpoint are
+//! tightest.
 //!
 //! Cases derived from ITF1788 `libieeep1788_elem.itl` (Apache-2.0, original
 //! author Marco Nehmeier, ITL port Oliver Heimlich; see
@@ -689,12 +685,11 @@ fn minimal_mul_dec_test() {
     dnai(DecoratedInterval::<TightF64>::nai() * dset(iv(1.0, 2.0), Decoration::Trv));
 }
 
-/// `minimal_div_test`: 285 active vectors (56 sound-but-not-
-/// tightest vectors relocated to the known-defect test below;
-/// 341 total in the corpus testcase).
+/// `minimal_div_test`: all 341 vectors of the corpus testcase, bit-exact
+/// over `TightF64` now that division rounds each quotient endpoint once.
 #[test]
 fn minimal_div_test() {
-    // minimal_div_test: 285 vectors
+    // minimal_div_test: 341 vectors
     emp(empty() / empty());
     emp(iv(-1.0, 1.0) / empty());
     emp(empty() / iv(-1.0, 1.0));
@@ -724,16 +719,28 @@ fn minimal_div_test() {
     eq(entire() / iv(0.0, INF), NINF, INF);
     eq(entire() / iv(-0.0, INF), NINF, INF);
     eq(entire() / entire(), NINF, INF);
+    eq(iv(-30.0, -15.0) / iv(-5.0, -3.0), 3.0, 10.0);
+    eq(iv(-30.0, -15.0) / iv(3.0, 5.0), -10.0, -3.0);
+    eq(iv(-30.0, -15.0) / iv(NINF, -3.0), 0.0, 10.0);
+    eq(iv(-30.0, -15.0) / iv(3.0, INF), -10.0, 0.0);
     emp(iv(-30.0, -15.0) / iv(0.0, 0.0));
+    eq(iv(-30.0, -15.0) / iv(-3.0, 0.0), 5.0, INF);
     emp(iv(-30.0, -15.0) / iv(-0.0, -0.0));
+    eq(iv(-30.0, -15.0) / iv(-3.0, -0.0), 5.0, INF);
     eq(iv(-30.0, -15.0) / iv(-3.0, 3.0), NINF, INF);
+    eq(iv(-30.0, -15.0) / iv(0.0, 3.0), NINF, -5.0);
     eq(iv(-30.0, -15.0) / iv(NINF, 0.0), 0.0, INF);
+    eq(iv(-30.0, -15.0) / iv(-0.0, 3.0), NINF, -5.0);
     eq(iv(-30.0, -15.0) / iv(NINF, -0.0), 0.0, INF);
     eq(iv(-30.0, -15.0) / iv(NINF, 3.0), NINF, INF);
     eq(iv(-30.0, -15.0) / iv(-3.0, INF), NINF, INF);
     eq(iv(-30.0, -15.0) / iv(0.0, INF), NINF, 0.0);
     eq(iv(-30.0, -15.0) / iv(-0.0, INF), NINF, 0.0);
     eq(iv(-30.0, -15.0) / entire(), NINF, INF);
+    eq(iv(-30.0, 15.0) / iv(-5.0, -3.0), -5.0, 10.0);
+    eq(iv(-30.0, 15.0) / iv(3.0, 5.0), -10.0, 5.0);
+    eq(iv(-30.0, 15.0) / iv(NINF, -3.0), -5.0, 10.0);
+    eq(iv(-30.0, 15.0) / iv(3.0, INF), -10.0, 5.0);
     emp(iv(-30.0, 15.0) / iv(0.0, 0.0));
     emp(iv(-30.0, 15.0) / iv(-0.0, -0.0));
     eq(iv(-30.0, 15.0) / iv(-3.0, 0.0), NINF, INF);
@@ -748,10 +755,18 @@ fn minimal_div_test() {
     eq(iv(-30.0, 15.0) / iv(0.0, INF), NINF, INF);
     eq(iv(-30.0, 15.0) / iv(-0.0, INF), NINF, INF);
     eq(iv(-30.0, 15.0) / entire(), NINF, INF);
+    eq(iv(15.0, 30.0) / iv(-5.0, -3.0), -10.0, -3.0);
+    eq(iv(15.0, 30.0) / iv(3.0, 5.0), 3.0, 10.0);
+    eq(iv(15.0, 30.0) / iv(NINF, -3.0), -10.0, 0.0);
+    eq(iv(15.0, 30.0) / iv(3.0, INF), 0.0, 10.0);
     emp(iv(15.0, 30.0) / iv(0.0, 0.0));
+    eq(iv(15.0, 30.0) / iv(-3.0, 0.0), NINF, -5.0);
     emp(iv(15.0, 30.0) / iv(-0.0, -0.0));
+    eq(iv(15.0, 30.0) / iv(-3.0, -0.0), NINF, -5.0);
     eq(iv(15.0, 30.0) / iv(-3.0, 3.0), NINF, INF);
+    eq(iv(15.0, 30.0) / iv(0.0, 3.0), 5.0, INF);
     eq(iv(15.0, 30.0) / iv(NINF, 0.0), NINF, 0.0);
+    eq(iv(15.0, 30.0) / iv(-0.0, 3.0), 5.0, INF);
     eq(iv(15.0, 30.0) / iv(NINF, -0.0), NINF, 0.0);
     eq(iv(15.0, 30.0) / iv(NINF, 3.0), NINF, INF);
     eq(iv(15.0, 30.0) / iv(-3.0, INF), NINF, INF);
@@ -794,18 +809,28 @@ fn minimal_div_test() {
     eq(iv(-0.0, -0.0) / iv(0.0, INF), 0.0, 0.0);
     eq(iv(-0.0, -0.0) / iv(-0.0, INF), 0.0, 0.0);
     eq(iv(-0.0, -0.0) / entire(), 0.0, 0.0);
+    eq(iv(NINF, -15.0) / iv(-5.0, -3.0), 3.0, INF);
+    eq(iv(NINF, -15.0) / iv(3.0, 5.0), NINF, -3.0);
     eq(iv(NINF, -15.0) / iv(NINF, -3.0), 0.0, INF);
     eq(iv(NINF, -15.0) / iv(3.0, INF), NINF, 0.0);
     emp(iv(NINF, -15.0) / iv(0.0, 0.0));
+    eq(iv(NINF, -15.0) / iv(-3.0, 0.0), 5.0, INF);
     emp(iv(NINF, -15.0) / iv(-0.0, -0.0));
+    eq(iv(NINF, -15.0) / iv(-3.0, -0.0), 5.0, INF);
     eq(iv(NINF, -15.0) / iv(-3.0, 3.0), NINF, INF);
+    eq(iv(NINF, -15.0) / iv(0.0, 3.0), NINF, -5.0);
     eq(iv(NINF, -15.0) / iv(NINF, 0.0), 0.0, INF);
+    eq(iv(NINF, -15.0) / iv(-0.0, 3.0), NINF, -5.0);
     eq(iv(NINF, -15.0) / iv(NINF, -0.0), 0.0, INF);
     eq(iv(NINF, -15.0) / iv(NINF, 3.0), NINF, INF);
     eq(iv(NINF, -15.0) / iv(-3.0, INF), NINF, INF);
     eq(iv(NINF, -15.0) / iv(0.0, INF), NINF, 0.0);
     eq(iv(NINF, -15.0) / iv(-0.0, INF), NINF, 0.0);
     eq(iv(NINF, -15.0) / entire(), NINF, INF);
+    eq(iv(NINF, 15.0) / iv(-5.0, -3.0), -5.0, INF);
+    eq(iv(NINF, 15.0) / iv(3.0, 5.0), NINF, 5.0);
+    eq(iv(NINF, 15.0) / iv(NINF, -3.0), -5.0, INF);
+    eq(iv(NINF, 15.0) / iv(3.0, INF), NINF, 5.0);
     emp(iv(NINF, 15.0) / iv(0.0, 0.0));
     eq(iv(NINF, 15.0) / iv(-3.0, 0.0), NINF, INF);
     emp(iv(NINF, 15.0) / iv(-0.0, -0.0));
@@ -820,6 +845,10 @@ fn minimal_div_test() {
     eq(iv(NINF, 15.0) / iv(0.0, INF), NINF, INF);
     eq(iv(NINF, 15.0) / iv(-0.0, INF), NINF, INF);
     eq(iv(NINF, 15.0) / entire(), NINF, INF);
+    eq(iv(-15.0, INF) / iv(-5.0, -3.0), NINF, 5.0);
+    eq(iv(-15.0, INF) / iv(3.0, 5.0), -5.0, INF);
+    eq(iv(-15.0, INF) / iv(NINF, -3.0), NINF, 5.0);
+    eq(iv(-15.0, INF) / iv(3.0, INF), -5.0, INF);
     emp(iv(-15.0, INF) / iv(0.0, 0.0));
     eq(iv(-15.0, INF) / iv(-3.0, 0.0), NINF, INF);
     emp(iv(-15.0, INF) / iv(-0.0, -0.0));
@@ -834,18 +863,28 @@ fn minimal_div_test() {
     eq(iv(-15.0, INF) / iv(0.0, INF), NINF, INF);
     eq(iv(-15.0, INF) / iv(-0.0, INF), NINF, INF);
     eq(iv(-15.0, INF) / entire(), NINF, INF);
+    eq(iv(15.0, INF) / iv(-5.0, -3.0), NINF, -3.0);
+    eq(iv(15.0, INF) / iv(3.0, 5.0), 3.0, INF);
     eq(iv(15.0, INF) / iv(NINF, -3.0), NINF, 0.0);
     eq(iv(15.0, INF) / iv(3.0, INF), 0.0, INF);
     emp(iv(15.0, INF) / iv(0.0, 0.0));
+    eq(iv(15.0, INF) / iv(-3.0, 0.0), NINF, -5.0);
     emp(iv(15.0, INF) / iv(-0.0, -0.0));
+    eq(iv(15.0, INF) / iv(-3.0, -0.0), NINF, -5.0);
     eq(iv(15.0, INF) / iv(-3.0, 3.0), NINF, INF);
+    eq(iv(15.0, INF) / iv(0.0, 3.0), 5.0, INF);
     eq(iv(15.0, INF) / iv(NINF, 0.0), NINF, 0.0);
+    eq(iv(15.0, INF) / iv(-0.0, 3.0), 5.0, INF);
     eq(iv(15.0, INF) / iv(NINF, -0.0), NINF, 0.0);
     eq(iv(15.0, INF) / iv(NINF, 3.0), NINF, INF);
     eq(iv(15.0, INF) / iv(-3.0, INF), NINF, INF);
     eq(iv(15.0, INF) / iv(0.0, INF), 0.0, INF);
     eq(iv(15.0, INF) / iv(-0.0, INF), 0.0, INF);
     eq(iv(15.0, INF) / entire(), NINF, INF);
+    eq(iv(-30.0, 0.0) / iv(-5.0, -3.0), 0.0, 10.0);
+    eq(iv(-30.0, 0.0) / iv(3.0, 5.0), -10.0, 0.0);
+    eq(iv(-30.0, 0.0) / iv(NINF, -3.0), 0.0, 10.0);
+    eq(iv(-30.0, 0.0) / iv(3.0, INF), -10.0, 0.0);
     emp(iv(-30.0, 0.0) / iv(0.0, 0.0));
     eq(iv(-30.0, 0.0) / iv(-3.0, 0.0), 0.0, INF);
     emp(iv(-30.0, 0.0) / iv(-0.0, -0.0));
@@ -860,6 +899,10 @@ fn minimal_div_test() {
     eq(iv(-30.0, 0.0) / iv(0.0, INF), NINF, 0.0);
     eq(iv(-30.0, 0.0) / iv(-0.0, INF), NINF, 0.0);
     eq(iv(-30.0, 0.0) / entire(), NINF, INF);
+    eq(iv(-30.0, -0.0) / iv(-5.0, -3.0), 0.0, 10.0);
+    eq(iv(-30.0, -0.0) / iv(3.0, 5.0), -10.0, 0.0);
+    eq(iv(-30.0, -0.0) / iv(NINF, -3.0), 0.0, 10.0);
+    eq(iv(-30.0, -0.0) / iv(3.0, INF), -10.0, 0.0);
     emp(iv(-30.0, -0.0) / iv(0.0, 0.0));
     eq(iv(-30.0, -0.0) / iv(-3.0, 0.0), 0.0, INF);
     emp(iv(-30.0, -0.0) / iv(-0.0, -0.0));
@@ -874,6 +917,10 @@ fn minimal_div_test() {
     eq(iv(-30.0, -0.0) / iv(0.0, INF), NINF, 0.0);
     eq(iv(-30.0, -0.0) / iv(-0.0, INF), NINF, 0.0);
     eq(iv(-30.0, -0.0) / entire(), NINF, INF);
+    eq(iv(0.0, 30.0) / iv(-5.0, -3.0), -10.0, 0.0);
+    eq(iv(0.0, 30.0) / iv(3.0, 5.0), 0.0, 10.0);
+    eq(iv(0.0, 30.0) / iv(NINF, -3.0), -10.0, 0.0);
+    eq(iv(0.0, 30.0) / iv(3.0, INF), 0.0, 10.0);
     emp(iv(0.0, 30.0) / iv(0.0, 0.0));
     eq(iv(0.0, 30.0) / iv(-3.0, 0.0), NINF, 0.0);
     emp(iv(0.0, 30.0) / iv(-0.0, -0.0));
@@ -888,6 +935,10 @@ fn minimal_div_test() {
     eq(iv(0.0, 30.0) / iv(0.0, INF), 0.0, INF);
     eq(iv(0.0, 30.0) / iv(-0.0, INF), 0.0, INF);
     eq(iv(0.0, 30.0) / entire(), NINF, INF);
+    eq(iv(-0.0, 30.0) / iv(-5.0, -3.0), -10.0, 0.0);
+    eq(iv(-0.0, 30.0) / iv(3.0, 5.0), 0.0, 10.0);
+    eq(iv(-0.0, 30.0) / iv(NINF, -3.0), -10.0, 0.0);
+    eq(iv(-0.0, 30.0) / iv(3.0, INF), 0.0, 10.0);
     emp(iv(-0.0, 30.0) / iv(0.0, 0.0));
     eq(iv(-0.0, 30.0) / iv(-3.0, 0.0), NINF, 0.0);
     emp(iv(-0.0, 30.0) / iv(-0.0, -0.0));
@@ -1004,78 +1055,6 @@ fn minimal_div_test() {
         NINF,
         hx("-0X1.5555555555555P-2"),
     );
-}
-
-/// KNOWN DEFECT (56 vectors relocated from `minimal_div_test`).
-///
-/// `Interval / Interval` is `self * rhs.recip()` (crates/interval-1788/src/ops.rs):
-/// two directed roundings where a directly rounded quotient is tighter. Every
-/// relocated vector is a SOUND enclosure of the corpus (the library result
-/// contains the tight result), typically one ulp wider on an inexact endpoint or
-/// on an attainable integer quotient the reciprocal path cannot recover (e.g.
-/// `[-30,-15] / [-5,-3]` is exactly `[3,10]` but yields `[2.999...6, 10.000...2]`).
-/// Asserted at the corpus (tight) values, set-equal on zeros, ignored until
-/// division gains a directly rounded path.
-#[test]
-#[ignore = "KNOWN DEFECT: interval-1788 division via a*recip(b) is sound but not tightest"]
-fn minimal_div_test_known_defect() {
-    // 56 vectors
-    eq(iv(-30.0, -15.0) / iv(-5.0, -3.0), 3.0, 10.0);
-    eq(iv(-30.0, -15.0) / iv(3.0, 5.0), -10.0, -3.0);
-    eq(iv(-30.0, -15.0) / iv(NINF, -3.0), 0.0, 10.0);
-    eq(iv(-30.0, -15.0) / iv(3.0, INF), -10.0, 0.0);
-    eq(iv(-30.0, -15.0) / iv(-3.0, 0.0), 5.0, INF);
-    eq(iv(-30.0, -15.0) / iv(-3.0, -0.0), 5.0, INF);
-    eq(iv(-30.0, -15.0) / iv(0.0, 3.0), NINF, -5.0);
-    eq(iv(-30.0, -15.0) / iv(-0.0, 3.0), NINF, -5.0);
-    eq(iv(-30.0, 15.0) / iv(-5.0, -3.0), -5.0, 10.0);
-    eq(iv(-30.0, 15.0) / iv(3.0, 5.0), -10.0, 5.0);
-    eq(iv(-30.0, 15.0) / iv(NINF, -3.0), -5.0, 10.0);
-    eq(iv(-30.0, 15.0) / iv(3.0, INF), -10.0, 5.0);
-    eq(iv(15.0, 30.0) / iv(-5.0, -3.0), -10.0, -3.0);
-    eq(iv(15.0, 30.0) / iv(3.0, 5.0), 3.0, 10.0);
-    eq(iv(15.0, 30.0) / iv(NINF, -3.0), -10.0, 0.0);
-    eq(iv(15.0, 30.0) / iv(3.0, INF), 0.0, 10.0);
-    eq(iv(15.0, 30.0) / iv(-3.0, 0.0), NINF, -5.0);
-    eq(iv(15.0, 30.0) / iv(-3.0, -0.0), NINF, -5.0);
-    eq(iv(15.0, 30.0) / iv(0.0, 3.0), 5.0, INF);
-    eq(iv(15.0, 30.0) / iv(-0.0, 3.0), 5.0, INF);
-    eq(iv(NINF, -15.0) / iv(-5.0, -3.0), 3.0, INF);
-    eq(iv(NINF, -15.0) / iv(3.0, 5.0), NINF, -3.0);
-    eq(iv(NINF, -15.0) / iv(-3.0, 0.0), 5.0, INF);
-    eq(iv(NINF, -15.0) / iv(-3.0, -0.0), 5.0, INF);
-    eq(iv(NINF, -15.0) / iv(0.0, 3.0), NINF, -5.0);
-    eq(iv(NINF, -15.0) / iv(-0.0, 3.0), NINF, -5.0);
-    eq(iv(NINF, 15.0) / iv(-5.0, -3.0), -5.0, INF);
-    eq(iv(NINF, 15.0) / iv(3.0, 5.0), NINF, 5.0);
-    eq(iv(NINF, 15.0) / iv(NINF, -3.0), -5.0, INF);
-    eq(iv(NINF, 15.0) / iv(3.0, INF), NINF, 5.0);
-    eq(iv(-15.0, INF) / iv(-5.0, -3.0), NINF, 5.0);
-    eq(iv(-15.0, INF) / iv(3.0, 5.0), -5.0, INF);
-    eq(iv(-15.0, INF) / iv(NINF, -3.0), NINF, 5.0);
-    eq(iv(-15.0, INF) / iv(3.0, INF), -5.0, INF);
-    eq(iv(15.0, INF) / iv(-5.0, -3.0), NINF, -3.0);
-    eq(iv(15.0, INF) / iv(3.0, 5.0), 3.0, INF);
-    eq(iv(15.0, INF) / iv(-3.0, 0.0), NINF, -5.0);
-    eq(iv(15.0, INF) / iv(-3.0, -0.0), NINF, -5.0);
-    eq(iv(15.0, INF) / iv(0.0, 3.0), 5.0, INF);
-    eq(iv(15.0, INF) / iv(-0.0, 3.0), 5.0, INF);
-    eq(iv(-30.0, 0.0) / iv(-5.0, -3.0), 0.0, 10.0);
-    eq(iv(-30.0, 0.0) / iv(3.0, 5.0), -10.0, 0.0);
-    eq(iv(-30.0, 0.0) / iv(NINF, -3.0), 0.0, 10.0);
-    eq(iv(-30.0, 0.0) / iv(3.0, INF), -10.0, 0.0);
-    eq(iv(-30.0, -0.0) / iv(-5.0, -3.0), 0.0, 10.0);
-    eq(iv(-30.0, -0.0) / iv(3.0, 5.0), -10.0, 0.0);
-    eq(iv(-30.0, -0.0) / iv(NINF, -3.0), 0.0, 10.0);
-    eq(iv(-30.0, -0.0) / iv(3.0, INF), -10.0, 0.0);
-    eq(iv(0.0, 30.0) / iv(-5.0, -3.0), -10.0, 0.0);
-    eq(iv(0.0, 30.0) / iv(3.0, 5.0), 0.0, 10.0);
-    eq(iv(0.0, 30.0) / iv(NINF, -3.0), -10.0, 0.0);
-    eq(iv(0.0, 30.0) / iv(3.0, INF), 0.0, 10.0);
-    eq(iv(-0.0, 30.0) / iv(-5.0, -3.0), -10.0, 0.0);
-    eq(iv(-0.0, 30.0) / iv(3.0, 5.0), 0.0, 10.0);
-    eq(iv(-0.0, 30.0) / iv(NINF, -3.0), -10.0, 0.0);
-    eq(iv(-0.0, 30.0) / iv(3.0, INF), 0.0, 10.0);
 }
 
 /// `minimal_div_dec_test`: 6 vectors.
