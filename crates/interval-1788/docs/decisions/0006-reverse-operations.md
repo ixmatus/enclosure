@@ -254,3 +254,35 @@ is stated once at the module level rather than re-argued per op.
 - Beads: enc-2pw (this design and its implementing half), enc-ac4 (the
   conformance lane that hardens the arithmetic reverses to bit-exact),
   enc-su3 (the conformance document consuming part 1's mapping).
+
+## Errata
+
+**2026-07-22: over `TightF64` the root bisection was not exact.** Part 3
+claims the `pownRev` bisection is exact over `TightF64`; the conformance
+lane refuted it. The straddle exit left one-to-three-ulp brackets for
+exponent magnitude three and above (44 vectors, bead enc-cov), and the
+negative-exponent path saturated its set-level reciprocal at `f64::MAX` on
+a subnormal-reaching constraint, cube-rooting `2^1024` instead of `2^1074`
+(8 vectors, bead enc-ral). Both are fixed on the exact `RoundPown` integer
+kernel (round-float decision record 0004), which part 3 could not assume
+because it predates that kernel.
+
+The positive-exponent root now bisects on the float grid over the
+correctly-rounded directed pair and ends with a neighbor certification that
+decides each candidate float's power against the constraint exactly, so it
+is correctly rounded for exponent magnitude at most `POWN_TIGHT_MAX` and
+sound beyond. The negative-exponent path roots first then reciprocates at
+the scalar level, so no set-level reciprocal saturates; where the constraint
+reciprocal is representable it certifies to the same correctly-rounded pair.
+
+One correction the corpus forced on the design: at the subnormal edge where
+the constraint reciprocal overflows, certifying against the original
+constraint is impossible, not merely imprecise. The deciding power `t^-m`
+underflows onto the coarse subnormal grid, where a whole binade of adjacent
+roots share one `pown` value, so no neighbor test can resolve the tightest
+root. The reference implementation's own `rootn` degrades identically there,
+one ulp inside the tightest floor for a non-power-of-two root such as
+`2^(1074/7)` (exact, `2^358`, for the power-of-two root of exponent three),
+and the corpus pins that degraded value. The negative path therefore holds
+the directed root-then-reciprocal seed at that edge rather than a
+tightening, matching the corpus. The original text stands as written.

@@ -40,14 +40,12 @@ v1.0; before then the API may break between 0.x releases.
 
 - Interval division is `a * recip(b)`, one rounding looser than the tightest
   quotient on 56 vectors (enc-ghz). (`pown`'s repeated-squaring looseness and
-  negative-power overflow collapse, 41 vectors, enc-5jj, are resolved by the
-  exact `RoundPown` kernel; see the Fixed section.) `pown_rev`'s root bisection
-  leaves one-to-
-  three-ulp brackets for exponent magnitude three and above, 44 vectors
-  (enc-cov, an erratum owed to decision record 0006 part 3), and its
-  negative-exponent path saturates the set-level reciprocal at the subnormal
-  edge, 8 vectors (enc-ral). `set_dec` returns NaI where the standard's
-  `setDec` clamps, 6 vectors (enc-2hd). The draft-era corpus propagates
+  negative-power overflow collapse, 41 vectors, enc-5jj, and `pown_rev`'s root
+  looseness for exponent magnitude three and above plus its negative-exponent
+  subnormal saturation, 52 vectors, enc-cov and enc-ral, are resolved by the
+  exact `RoundPown` kernel; see the Fixed section.) `set_dec` returns NaI where
+  the standard's `setDec` clamps, 6 vectors (enc-2hd). The draft-era corpus
+  propagates
   decorations through the two-output division where decision record 0006
   part 5 grades `trv`, 175 decoration-only divergences pending a
   final-standard reading (enc-pzd). The decorated conformance surface lacks
@@ -59,19 +57,19 @@ v1.0; before then the API may break between 0.x releases.
 - The reverse operations on `Interval<F>` and `DecoratedInterval<F>`, in a new
   `reverse` module, each in its explicit-candidate form
   (`f_rev(c, x) = hull({ t in x : f(t) in c })`, the standard's candidate-less
-  form recovered at `x = entire`): `sqr_rev`, `abs_rev`, `pown_rev`, `mul_rev`,
-  and the two-output `mul_rev_to_pair` over bare `RoundFloat`; `sin_rev`,
-  `cos_rev`, `tan_rev` behind `F: RoundInverseTrig`; `cosh_rev` behind
+  form recovered at `x = entire`): `sqr_rev`, `abs_rev`, `mul_rev`, and the
+  two-output `mul_rev_to_pair` over bare `RoundFloat`; `pown_rev` behind
+  `F: RoundFloat + RoundPown` (see the Fixed section); `sin_rev`, `cos_rev`,
+  `tan_rev` behind `F: RoundInverseTrig`; `cosh_rev` behind
   `F: RoundInverseHyperbolic`; and `pow_rev1`, `pow_rev2` behind
   `F: RoundTranscendental`. The arithmetic reverses are the tightest
-  representable result over any `RoundFloat` from directed arithmetic: the square
-  and integer roots come from a two-phase value-domain bisection over the
-  directed `pown` chain (geometric probes by directed `sqrt` while the bracket is
-  wide, arithmetic probes once it is narrow, a multiplicative straddle refinement
-  at the exit; never `RoundPow`, so the arm is exact on backends that lack it),
-  and `mul_rev`/`mul_rev_to_pair` from the zero-straddle case table of the
-  two-output division, with `mul_rev` the hull of the pair's two pieces each
-  intersected with the candidate. The periodic reverses enumerate exactly the
+  representable result: `sqr_rev` from directed `sqrt`, `pown_rev` from a
+  two-phase value-domain bisection (geometric probes by directed `sqrt` while the
+  bracket is wide, arithmetic probes once it is narrow) over the exact `RoundPown`
+  directed pair, ending in a neighbor certification, and
+  `mul_rev`/`mul_rev_to_pair` from the zero-straddle case table of the two-output
+  division, with `mul_rev` the hull of the pair's two pieces each intersected with
+  the candidate. The periodic reverses enumerate exactly the
   preimage arcs that can meet the candidate, wherever it sits: arc placement is
   by sound interval sums of doubled period-enclosure blocks (a galloping landing
   and a one-period walk, so no float arc counter can drift off the integers),
@@ -332,6 +330,11 @@ v1.0; before then the API may break between 0.x releases.
   chain. A compile break for a third-party backend that implements only bare
   `RoundFloat`; accepted pre-1.0, since a conforming backend owes `pown`.
   Round-float decision record 0004.
+- `Interval::pown_rev` and `DecoratedInterval::pown_rev` likewise move behind the
+  `F: RoundFloat + RoundPown` bound (was bare `RoundFloat`), so the reverse root
+  rides the exact kernel that funds correct rounding. The other arithmetic
+  reverses (`sqr_rev`, `abs_rev`, `mul_rev`, `mul_rev_to_pair`) stay on bare
+  `RoundFloat`. Same pre-1.0 compile-break rationale. See the Fixed section.
 - `mid`, `rad`, and `mid_rad` now sit behind the `RoundLargestFinite` capability
   bound and follow IEEE 1788's Level 2 realmax convention on half-unbounded
   intervals: `mid([a, +inf]) = +LARGEST_FINITE`, `mid([-inf, b]) =
@@ -367,6 +370,24 @@ v1.0; before then the API may break between 0.x releases.
   endpoint-wise under a parity and zero-position case table. The former
   known-defect twin `minimal_pown_test_known_defect` is retired. Round-float
   decision record 0004; workspace decision record 0007 erratum.
+- `pown_rev` roots are correctly rounded for exponent magnitude one through
+  `RoundPown::POWN_TIGHT_MAX`, all 358 corpus vectors now bit-exact over
+  `TightF64` (beads enc-cov, enc-ral). The positive-exponent root bisects on the
+  float grid over the exact `RoundPown` directed pair and ends with a neighbor
+  certification that decides each candidate float's power against the constraint
+  exactly (the straddle-exit bracket that left one-to-three-ulp looseness for
+  exponent magnitude three and above is gone; minimized case
+  `pown_rev([0, 0x1.A87587109655P+66], 8)` yields sup `0x407444ccccccccce`, was
+  `...ccf`). The negative-exponent path roots first then reciprocates at the
+  scalar level, so no set-level reciprocal saturates at the subnormal edge
+  (`pown_rev([0, 5e-324], -3)` reaches `2^358`, was `~2^341`); where the
+  constraint reciprocal is representable the pair is certified correctly rounded,
+  and where it overflows the directed root-then-reciprocal seed matches the
+  reference implementation's own `rootn` (the value the corpus pins, one ulp
+  inside the tightest floor for a non-power-of-two root). The private
+  repeated-squaring chain copies (`abs_pow_down`/`abs_pow_up`) are deleted;
+  `pown_rev` and its decorated twin gain the `RoundPown` bound. The former
+  known-defect and known-gap twins are retired. Decision record 0006 erratum.
 - Decorated `+`, `-`, `*`, `/`, `recip`, `sqr`, `sqrt`, and `mul_add` no longer
   pack `com` with an overflowed unbounded result. A bounded operation can reach
   `[lo, +inf]`, and `com` promises a bounded result, so the shared `pack` seam

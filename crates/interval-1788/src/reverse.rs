@@ -28,11 +28,23 @@
 //! The arithmetic reverses (`sqr_rev`, `abs_rev`, `pown_rev`, `mul_rev`,
 //! `mul_rev_to_pair`) are computed to the tightest representable result over any
 //! [`RoundFloat`] from directed arithmetic; `abs_rev` and the structural arms
-//! are exact, and `sqr_rev`/`pown_rev` are exact but for the directed roots. The
-//! transcendental reverses (`sin_rev`, `cos_rev`, `tan_rev`, `cosh_rev`,
-//! `pow_rev1`, `pow_rev2`) inherit the fixture margins of the traits that fund
-//! them: sound and near-tight, never claimed tightest over the sound-not-tight
-//! fixture. Every arm soundly encloses the true reverse image; the property lane
+//! are exact, and `sqr_rev` is exact but for the directed `sqrt`. `pown_rev`
+//! rides the exact [`RoundPown`] integer kernel: its
+//! roots bisect on the float grid over the correctly-rounded directed pair and
+//! end with a neighbor certification that decides each candidate float's power
+//! against the constraint exactly, so the positive-exponent result is correctly
+//! rounded for exponent magnitude at most `RoundPown::POWN_TIGHT_MAX` and a
+//! sound enclosure beyond. The negative exponents root first then reciprocate at
+//! the scalar level (never a saturating set-level reciprocal); the pair is
+//! correctly rounded where the constraint reciprocal is representable, and where
+//! it overflows the directed root-then-reciprocal seed stands, matching the
+//! reference implementation's own degraded `rootn` at that subnormal edge (the
+//! value the corpus pins, one ulp inside the tightest floor for a
+//! non-power-of-two root). The transcendental
+//! reverses (`sin_rev`, `cos_rev`, `tan_rev`, `cosh_rev`, `pow_rev1`,
+//! `pow_rev2`) inherit the fixture margins of the traits that fund them: sound
+//! and near-tight, never claimed tightest over the sound-not-tight fixture.
+//! Every arm soundly encloses the true reverse image; the property lane
 //! discharges that against the forward battery alone.
 //!
 //! # The periodic preimage
@@ -51,7 +63,9 @@
 //! loss.
 
 use crate::interval::Interval;
-use round_float::{RoundFloat, RoundInverseHyperbolic, RoundInverseTrig, RoundTranscendental};
+use round_float::{
+    RoundFloat, RoundInverseHyperbolic, RoundInverseTrig, RoundPown, RoundTranscendental,
+};
 
 // --- Shared helpers ---------------------------------------------------------
 
@@ -65,78 +79,169 @@ fn fabs<F: RoundFloat>(x: F) -> F {
     }
 }
 
-/// A lower bound on `m^k` for finite `m >= 0` and `k >= 1`, by directed binary
-/// exponentiation (every product rounds down, every operand stays nonnegative).
-fn abs_pow_down<F: RoundFloat>(m: F, k: u32) -> F {
-    if m.is_zero() {
-        return F::ZERO;
-    }
-    if k == 1 {
-        return m;
-    }
-    let mut result = F::ONE;
-    let mut base = m;
-    let mut e = k;
-    while e > 0 {
-        if e & 1 == 1 {
-            result = result.mul_down(base);
-        }
-        e >>= 1;
-        if e > 0 {
-            base = base.mul_down(base);
-        }
-    }
-    result
+/// The exact ordering of `y^n` against a float `v`, for a finite `y > 0` and
+/// `n != 0`, read from the correctly-rounded [`RoundPown`] directed pair.
+///
+/// Let `down = pown_down(y, n)` and `up = pown_up(y, n)`. For `1 <= |n| <=
+/// POWN_TIGHT_MAX` the kernel is correctly rounded, so `down` and `up` are the
+/// same float (`y^n` exactly representable) or adjacent floats straddling `y^n`.
+/// A float `v` therefore cannot fall strictly between `down` and `up`, and the
+/// sign of `y^n - v` is decided exactly:
+///
+/// - `up < v` => `y^n <= up < v`, so [`Less`](PowCmp::Less).
+/// - `down > v` => `y^n >= down > v`, so [`Greater`](PowCmp::Greater).
+/// - `down == up == v` => `y^n == v`, so [`Equal`](PowCmp::Equal).
+/// - `down == v < up` => `y^n` is not a float and lies in `(down, up)`, above
+///   `v`: [`Greater`](PowCmp::Greater).
+/// - `down < v == up` => `y^n` lies in `(down, up)`, below `v`:
+///   [`Less`](PowCmp::Less).
+///
+/// `None` is the straddle `down < v < up`, which the correct-rounding property
+/// makes impossible for `|n| <= POWN_TIGHT_MAX`; it can arise only where the
+/// kernel is sound but not tightest, and the caller then falls back to a sound
+/// (non-certified) bracket.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PowCmp {
+    Less,
+    Equal,
+    Greater,
 }
 
-/// An upper bound on `m^k` for finite `m >= 0` and `k >= 1`, rounding up.
-fn abs_pow_up<F: RoundFloat>(m: F, k: u32) -> F {
-    if m.is_zero() {
-        return F::ZERO;
+/// Decide `y^n` against `v` per [`PowCmp`]. `y > 0` finite, `v` finite, `n != 0`.
+#[inline]
+fn pow_cmp<F: RoundFloat + RoundPown>(y: F, n: i32, v: F) -> Option<PowCmp> {
+    let down = y.pown_down(n);
+    let up = y.pown_up(n);
+    if up < v {
+        Some(PowCmp::Less)
+    } else if down > v {
+        Some(PowCmp::Greater)
+    } else if down == up && down == v {
+        Some(PowCmp::Equal)
+    } else if down == v {
+        // down == v < up: y^n in (down, up), strictly above v.
+        Some(PowCmp::Greater)
+    } else if up == v {
+        // down < v == up: y^n in (down, up), strictly below v.
+        Some(PowCmp::Less)
+    } else {
+        // down < v < up: only reachable when |n| > POWN_TIGHT_MAX.
+        None
     }
-    if k == 1 {
-        return m;
-    }
-    let mut result = F::ONE;
-    let mut base = m;
-    let mut e = k;
-    while e > 0 {
-        if e & 1 == 1 {
-            result = result.mul_up(base);
-        }
-        e >>= 1;
-        if e > 0 {
-            base = base.mul_up(base);
-        }
-    }
-    result
 }
 
-/// The number of bisection probes used to bracket an integer root. The
-/// bisection runs in two phases. While the bracket spans more than a factor of
-/// two, the probe is the geometric mean of the ends (directed `sqrt` and
-/// multiply), which halves the EXPONENT gap per probe: the widest bracket the
-/// construction loops can produce spans the full binary64 exponent range
-/// (about 2100 binades), so at most about 11 geometric probes reach a
-/// factor-two bracket regardless of where the root sits. The arithmetic phase
-/// then gains one significand bit per probe, closing a factor-two bracket in
-/// at most about 53 probes; 96 covers both phases with headroom for the
-/// sloppy fixture's outward steps. A straddle exit (the backend's `pown`
-/// bounds bracket `v` at the probe) refines the bracket multiplicatively from
-/// the straddle values themselves, so the exit width is bounded by the `pown`
-/// chain's rounding, not by the probe count. Each probe is one directed
-/// `pown` chain, so the whole root costs a bounded multiple of a forward
-/// `pown`. This is the bare-`RoundFloat` root the decision record fixes in
-/// place of `RoundPow`, which the conformance backend does not implement.
+/// Certify a sound root bracket to the correctly-rounded directed pair.
+///
+/// On entry `lo <= y <= hi` with `lo`, `hi` finite and `lo > 0`, where `y > 0`
+/// is the real solution of `y^n = v` (`v > 0` finite, `n != 0`). The bracket is
+/// bisected on the float grid until no interior probe remains (the ends are
+/// adjacent floats, or equal), the exact decision [`pow_cmp`] steering each
+/// step, and the two adjacent survivors are returned with any exactly
+/// representable root collapsed to a point. For `|n| > POWN_TIGHT_MAX`, where
+/// the kernel pair can straddle, the loop exits on the first straddle with the
+/// current sound bracket (correct rounding is not claimed there).
+///
+/// `y^n` is increasing in `y` for `n > 0` and decreasing for `n < 0`, so a probe
+/// `m` decided [`PowCmp::Less`] (`m^n < v`) lifts `lo` when increasing and lowers
+/// `hi` when decreasing; the invariant kept is `lo <= y <= hi`. The `|n| >
+/// POWN_TIGHT_MAX` straddle fallback (positive exponent only) exits sound.
+fn refine_root<F: RoundFloat + RoundPown>(v: F, n: i32, mut lo: F, mut hi: F) -> (F, F) {
+    // `lo` and `hi` are finite positive (non-NaN) here, so `>=` is total.
+    if lo >= hi {
+        return (lo, hi);
+    }
+    let one = F::ONE;
+    let two = one.add_up(one);
+    let half = one.div_up(two);
+    let increasing = n > 0;
+    let mut probes = 0;
+    while probes < ROOT_PROBES {
+        // Geometric probe while the bracket spans more than a factor of two
+        // (halves the exponent gap), arithmetic once it is narrow (gains a
+        // significand bit); `lo > 0` throughout.
+        let wide = hi.is_finite() && hi > lo.add_up(lo);
+        let mut m = if wide {
+            lo.sqrt_down().mul_down(hi.sqrt_down())
+        } else {
+            lo.add_up(hi).mul_up(half)
+        };
+        if !(m > lo && m < hi) {
+            m = lo.add_up(hi).mul_up(half);
+            if !(m > lo && m < hi) {
+                // No interior float: the ends are adjacent (or equal). Done.
+                break;
+            }
+        }
+        match pow_cmp(m, n, v) {
+            Some(PowCmp::Equal) => return (m, m),
+            Some(PowCmp::Less) => {
+                // m^n < v: root above m when increasing, below when decreasing.
+                if increasing {
+                    lo = m;
+                } else {
+                    hi = m;
+                }
+            }
+            Some(PowCmp::Greater) => {
+                if increasing {
+                    hi = m;
+                } else {
+                    lo = m;
+                }
+            }
+            None => {
+                // |n| > POWN_TIGHT_MAX straddle: refine multiplicatively from
+                // the straddle values (positive exponent only) and exit sound.
+                if increasing {
+                    let pu = m.pown_up(n);
+                    let pd = m.pown_down(n);
+                    if pu.is_finite() && !pu.is_zero() {
+                        lo = lo.rmax(m.mul_down(v.div_down(pu)));
+                    }
+                    if pd.is_finite() && !pd.is_zero() {
+                        hi = hi.rmin(m.mul_up(v.div_up(pd)));
+                    }
+                }
+                break;
+            }
+        }
+        probes += 1;
+    }
+    // Collapse an exactly representable root; otherwise the ends are the
+    // correctly-rounded directed pair (or the sound straddle bracket).
+    if pow_cmp(lo, n, v) == Some(PowCmp::Equal) {
+        return (lo, lo);
+    }
+    if pow_cmp(hi, n, v) == Some(PowCmp::Equal) {
+        return (hi, hi);
+    }
+    (lo, hi)
+}
+
+/// The bisection probe budget for a single integer root. The bisection runs in
+/// two phases. While the bracket spans more than a factor of two, the probe is
+/// the geometric mean of the ends (directed `sqrt` and multiply), which halves
+/// the EXPONENT gap per probe: the widest bracket the seed loops produce spans
+/// the full binary64 exponent range (about 2100 binades), so at most about 11
+/// geometric probes reach a factor-two bracket regardless of where the root
+/// sits. The arithmetic phase then gains one significand bit per probe and
+/// walks the float grid all the way to adjacency, closing a factor-two bracket
+/// in at most about 53 probes; 96 covers both phases with headroom for the
+/// sloppy fixture's outward steps. Each probe is one correctly-rounded
+/// [`RoundPown`] decision, so the whole root costs a bounded multiple of a
+/// forward `pown`. The neighbor certification the arithmetic phase ends in
+/// makes the pair correctly rounded for exponent magnitude at most
+/// [`RoundPown::POWN_TIGHT_MAX`]; beyond it the kernel is sound but not
+/// tightest and the bracket exits on its first straddle (see [`refine_root`]).
 const ROOT_PROBES: u32 = 96;
 
-/// Lower and upper bounds on the real `n`-th root `v^(1/n)` for `v >= 0`, by
-/// value-domain bisection over the directed `pown` chain (geometric probes
-/// while the bracket is wide, arithmetic probes once it is narrow; see
-/// [`ROOT_PROBES`]). Any interior probe keeps the bracket sound, so the probe
-/// choice affects only convergence. Sound on every backend and exact but for
-/// the backend's own `pown` rounding.
-fn nth_root_bounds<F: RoundFloat>(v: F, n: u32) -> (F, F) {
+/// Correctly-rounded lower and upper bounds on the real `n`-th root `v^(1/n)`
+/// for `v >= 0` and `n >= 1`, by value-domain bisection over the exact
+/// [`RoundPown`] pair (geometric probes while the bracket is wide, arithmetic
+/// probes once it is narrow, ending in the neighbor certification of
+/// [`refine_root`]; see [`ROOT_PROBES`]). The pair is the tightest representable
+/// for `1 <= n <= POWN_TIGHT_MAX` and a sound enclosure beyond.
+fn nth_root_bounds<F: RoundFloat + RoundPown>(v: F, n: u32) -> (F, F) {
     let zero = F::ZERO;
     let one = F::ONE;
     if v.is_zero() {
@@ -148,82 +253,42 @@ fn nth_root_bounds<F: RoundFloat>(v: F, n: u32) -> (F, F) {
     if n == 1 {
         return (v, v);
     }
+    // The exponent magnitude is small (the corpus reaches 8, `POWN_TIGHT_MAX` is
+    // 64); a value near `u32::MAX` would already overflow every `pown`.
+    #[allow(clippy::cast_possible_wrap)]
+    let ni = n as i32;
     let two = one.add_up(one);
     let half = one.div_up(two);
     let (mut lo, mut hi);
     if v >= one {
-        // Root is at least one; grow the upper bracket by doubling.
+        // Root is at least one; grow the upper bracket by doubling until its
+        // `pown` LOWER bound reaches `v` (so `hi^n >= v`, i.e. `hi >= root`).
         lo = one;
         hi = two;
-        while abs_pow_down(hi, n) < v {
+        while hi.pown_down(ni) < v {
             hi = hi.add_up(hi);
             if hi.is_infinite() {
                 break;
             }
         }
     } else {
-        // Root is below one; shrink the lower bracket by halving.
+        // Root is below one; shrink the lower bracket by halving until its
+        // `pown` UPPER bound drops to `v` (so `lo^n <= v`, i.e. `lo <= root`).
         hi = one;
         lo = half;
-        while abs_pow_up(lo, n) > v {
+        while lo.pown_up(ni) > v {
             lo = lo.mul_down(half);
             if lo.is_zero() {
                 return (zero, hi);
             }
         }
     }
-    let mut probes = 0;
-    while probes < ROOT_PROBES {
-        // Geometric probe while the bracket spans more than a factor of two
-        // (halves the exponent gap); arithmetic probe once it is narrow (gains
-        // a significand bit). `lo > 0` here: both construction branches leave
-        // a strictly positive lower end.
-        let wide = hi.is_finite() && hi > lo.add_up(lo);
-        let mut m = if wide {
-            lo.sqrt_down().mul_down(hi.sqrt_down())
-        } else {
-            lo.add_up(hi).mul_up(half)
-        };
-        if !(m > lo && m < hi) {
-            m = lo.add_up(hi).mul_up(half);
-            if !(m > lo && m < hi) {
-                break;
-            }
-        }
-        let pu = abs_pow_up(m, n);
-        if pu <= v {
-            // m^n <= v, so the root is at least m.
-            lo = m;
-            probes += 1;
-            continue;
-        }
-        let pd = abs_pow_down(m, n);
-        if pd >= v {
-            // m^n >= v, so the root is at most m.
-            hi = m;
-            probes += 1;
-            continue;
-        }
-        // Straddle: pd < v < pu with pd <= m^n <= pu, so (r/m)^n = v/m^n lies
-        // in [v/pu, v/pd]. For 0 < a <= 1 the n-th root satisfies
-        // a <= a^(1/n), and for a >= 1 it satisfies a^(1/n) <= a, so
-        // r >= m*(v/pu) and r <= m*(v/pd): a bracket a few rounding steps
-        // wide, the tightest exit the backend's rounding admits, wherever in
-        // the bisection the straddle fires.
-        if pu.is_finite() && !pu.is_zero() {
-            lo = lo.rmax(m.mul_down(v.div_down(pu)));
-        }
-        if pd.is_finite() && !pd.is_zero() {
-            hi = hi.rmin(m.mul_up(v.div_up(pd)));
-        }
-        break;
-    }
-    (lo, hi)
+    refine_root(v, ni, lo, hi)
 }
 
 /// Signed `n`-th root bounds for an odd `n` (monotone increasing, carrying the
 /// sign): `(-v)^(1/n) = -(v^(1/n))`.
-fn signed_root_bounds<F: RoundFloat>(v: F, n: u32) -> (F, F) {
+fn signed_root_bounds<F: RoundFloat + RoundPown>(v: F, n: u32) -> (F, F) {
     let zero = F::ZERO;
     if v < zero {
         let (d, u) = nth_root_bounds(fabs(v), n);
@@ -231,6 +296,41 @@ fn signed_root_bounds<F: RoundFloat>(v: F, n: u32) -> (F, F) {
     } else {
         nth_root_bounds(v, n)
     }
+}
+
+/// Lower and upper bounds on the positive real `y = 1/v^(1/m)` that solves
+/// `y^(-m) = v`, for `v > 0` finite and `m >= 1` (the magnitude of a negative
+/// exponent). The upper bound is `+inf` exactly when the root overruns the
+/// finite range.
+///
+/// The bracket is seeded root-first then reciprocated at the scalar level (the
+/// magnitude root `v^(1/m)` of a representable `v` never overflows, and the
+/// scalar `div` reaches values a set-level reciprocal of `v` would have
+/// saturated past). Then, WHERE THE CONSTRAINT RECIPROCAL IS REPRESENTABLE, a
+/// neighbor certification against the original `v` tightens the pair to
+/// correctly rounded (bead enc-ral, normal-constraint negative exponents).
+///
+/// Where `1/v` overflows (a subnormal-reaching constraint), the certification is
+/// abandoned and the directed root-then-reciprocal seed stands: the reference's
+/// own `rootn` degrades by a rounding at that edge (`1/2^-1074` roots exactly to
+/// `2^358` for exponent three, but the seventh root `2^(1074/7)` lands its
+/// pair one ulp below the tightest floor), and the corpus pins that degraded
+/// value, so the seed, not a tightening, is the conformant answer.
+fn neg_root_bounds<F: RoundFloat + RoundPown>(v: F, m: u32) -> (F, F) {
+    let one = F::ONE;
+    #[allow(clippy::cast_possible_wrap)]
+    let n = -(m as i32);
+    let (w_d, w_u) = nth_root_bounds(v, m);
+    let seed_lo = one.div_down(w_u);
+    let seed_hi = one.div_up(w_d);
+    // The constraint reciprocal overflows (or the root itself does): the
+    // reference degrades here, so the directed seed is the conformant pair.
+    if !seed_hi.is_finite() || !one.div_up(v).is_finite() {
+        return (seed_lo, seed_hi);
+    }
+    // Otherwise certify to the correctly-rounded pair. `v` is representable with
+    // a representable reciprocal, so the deciding powers `y^-m` stay in range.
+    refine_root(v, n, seed_lo, seed_hi)
 }
 
 /// Ordinary interval division `c / b` with `0` not in `b`, by directed division
@@ -375,7 +475,9 @@ impl<F: RoundFloat> Interval<F> {
         let neg = Self::hull(c_hi.negate(), cc_lo.negate());
         pos.intersection(x).convex_hull(neg.intersection(x))
     }
+}
 
+impl<F: RoundFloat + RoundPown> Interval<F> {
     /// The reverse of the integer power,
     /// `pown_rev(c, x, n) = hull({ t in x : t^n in c })`, with `self` the
     /// constraint and the exponent `n` trailing as `pown`'s does.
@@ -384,9 +486,15 @@ impl<F: RoundFloat> Interval<F> {
     /// `1 in c` and empty otherwise. For `n > 0` an odd power is monotone (a
     /// single signed-root interval) and an even power folds through the
     /// magnitude (the symmetric root pair, with the constraint clipped to
-    /// `[0, +inf)`). For `n < 0` the reverse is that of the positive exponent
-    /// taken on the set-level reciprocal of the constraint. Exact but for the
-    /// directed roots of `nth_root_bounds`.
+    /// `[0, +inf)`). For `n < 0` the map `t^n = 1/t^m` is decreasing on each
+    /// side of its pole at zero, and the reverse roots first then reciprocates
+    /// at the scalar level (never a saturating set-level reciprocal). The roots
+    /// ride the exact [`RoundPown`] kernel: the positive-exponent result and the
+    /// negative-exponent result with a representable constraint reciprocal are
+    /// correctly rounded for `|n| <= RoundPown::POWN_TIGHT_MAX`; a sound
+    /// enclosure holds beyond, and at the subnormal edge where the constraint
+    /// reciprocal overflows the negative path matches the reference's directed
+    /// composition (see the [module docs](crate::reverse)).
     #[must_use]
     pub fn pown_rev(self, x: Self, n: i32) -> Self {
         if self.is_empty() {
@@ -403,15 +511,14 @@ impl<F: RoundFloat> Interval<F> {
             #[allow(clippy::cast_sign_loss)]
             pos_pown_rev(self, x, n as u32)
         } else {
-            let m = n.unsigned_abs();
-            pos_pown_rev(self.recip(), x, m)
+            neg_pown_rev(self, x, n.unsigned_abs())
         }
     }
 }
 
 /// The reverse of `t^m` for a strictly positive exponent `m`, the shared core of
 /// [`Interval::pown_rev`].
-fn pos_pown_rev<F: RoundFloat>(c: Interval<F>, x: Interval<F>, m: u32) -> Interval<F> {
+fn pos_pown_rev<F: RoundFloat + RoundPown>(c: Interval<F>, x: Interval<F>, m: u32) -> Interval<F> {
     let Some((c_lo, c_hi)) = c.bounds() else {
         return Interval::empty();
     };
@@ -435,6 +542,79 @@ fn pos_pown_rev<F: RoundFloat>(c: Interval<F>, x: Interval<F>, m: u32) -> Interv
         let neg = Interval::hull(r_hi.negate(), r_lo.negate());
         pos.intersection(x).convex_hull(neg.intersection(x))
     }
+}
+
+/// The reverse of `t^n` for a strictly negative exponent `n = -m`, the negative
+/// arm of [`Interval::pown_rev`].
+///
+/// `t^n = 1/t^m` has a pole at zero and is DECREASING on each of `(-inf, 0)` and
+/// `(0, inf)`; its range on each side is one open half-line. So, unlike the
+/// increasing positive-odd case, the preimage generally splits into two pieces,
+/// and the endpoint that a value maps to swaps sense: the LARGER constraint
+/// value pins the SMALLER magnitude. Each magnitude is a [`neg_root_bounds`]
+/// pair, `1/v^(1/m)` computed root-first then reciprocated so the subnormal edge
+/// never overflows a set-level reciprocal.
+///
+/// The positive-t piece collects the constraint's positive values: its lower end
+/// is the down-root of `c_hi` (or `0` when `c_hi` is unbounded, the value
+/// growing without bound as `t -> 0+`), its upper end the up-root of `c_lo` (or
+/// `+inf` when `c_lo` reaches zero, `t` growing without bound as the value tends
+/// to `0+`). For even `m` the map is `1/|t|^m`, so the negative piece is the
+/// mirror of the positive one through zero. For odd `m` the negative piece
+/// handles the negative values through `s = -t > 0` (with `s^n in [-c_hi,
+/// -c_lo]`, then `t = -s`), which is the positive-piece construction on the
+/// negated constraint.
+fn neg_pown_rev<F: RoundFloat + RoundPown>(c: Interval<F>, x: Interval<F>, m: u32) -> Interval<F> {
+    let Some((c_lo, c_hi)) = c.bounds() else {
+        return Interval::empty();
+    };
+    let zero = F::ZERO;
+    let inf = F::INFINITY;
+    // The positive-t piece, active only when the constraint reaches a positive
+    // value (`t^n > 0` for `t > 0`).
+    let positive = if c_hi > zero {
+        let p_lo = if c_hi.is_infinite() {
+            zero
+        } else {
+            neg_root_bounds(c_hi, m).0
+        };
+        let p_hi = if c_lo <= zero {
+            inf
+        } else {
+            neg_root_bounds(c_lo, m).1
+        };
+        Interval::hull(p_lo, p_hi)
+    } else {
+        Interval::empty()
+    };
+    if m % 2 == 0 {
+        // Even: the negative piece is the positive one reflected through zero.
+        let neg = match positive.bounds() {
+            Some((p_lo, p_hi)) => Interval::hull(p_hi.negate(), p_lo.negate()),
+            None => Interval::empty(),
+        };
+        return positive.intersection(x).convex_hull(neg.intersection(x));
+    }
+    // Odd: the negative piece handles the constraint's negative values through
+    // `s = -t`, the positive-piece construction on `[-c_hi, -c_lo]`.
+    let negative = if c_lo < zero {
+        let s_lo = if c_lo.is_infinite() {
+            zero
+        } else {
+            neg_root_bounds(fabs(c_lo), m).0
+        };
+        let s_hi = if c_hi >= zero {
+            inf
+        } else {
+            neg_root_bounds(fabs(c_hi), m).1
+        };
+        Interval::hull(s_hi.negate(), s_lo.negate())
+    } else {
+        Interval::empty()
+    };
+    positive
+        .intersection(x)
+        .convex_hull(negative.intersection(x))
 }
 
 // --- Multiplication reverses: mul_rev, mul_rev_to_pair ----------------------
@@ -941,13 +1121,6 @@ impl<F: RoundFloat> DecoratedInterval<F> {
         dec_rev(nai, self.interval().abs_rev(x.interval()))
     }
 
-    /// Reverse integer power, decorated `trv`.
-    #[must_use]
-    pub fn pown_rev(self, x: Self, n: i32) -> Self {
-        let nai = self.is_nai() || x.is_nai();
-        dec_rev(nai, self.interval().pown_rev(x.interval(), n))
-    }
-
     /// Reverse multiplication, decorated `trv`.
     #[must_use]
     pub fn mul_rev(self, c: Self, x: Self) -> Self {
@@ -967,6 +1140,16 @@ impl<F: RoundFloat> DecoratedInterval<F> {
             Self::set_dec(p1, Decoration::Trv),
             Self::set_dec(p2, Decoration::Trv),
         )
+    }
+}
+
+impl<F: RoundFloat + RoundPown> DecoratedInterval<F> {
+    /// Reverse integer power, decorated `trv` (see the [module
+    /// docs](crate::reverse)).
+    #[must_use]
+    pub fn pown_rev(self, x: Self, n: i32) -> Self {
+        let nai = self.is_nai() || x.is_nai();
+        dec_rev(nai, self.interval().pown_rev(x.interval(), n))
     }
 }
 
@@ -1026,32 +1209,42 @@ mod tests {
         Interval::new(lo, hi).unwrap()
     }
 
-    #[test]
-    fn pown_rev_small_root_is_binade_tight() {
-        // Rework regression: c = [1e-300, 1e-300], n = 2; the true root is near
-        // 1e-150. The arithmetic-only bisection left the bracket at
-        // [6.1e-151, 2^-64], 130 orders of magnitude loose above; the
-        // geometric phase must close both bounds to within a couple of
-        // binades of the root.
-        let r = iv(1e-300, 1e-300).pown_rev(iv(0.0, 1.0), 2);
-        assert!(!r.is_empty());
-        assert!(r.sup() <= 4.0e-150, "upper bound too loose: {:e}", r.sup());
-        assert!(r.sup() >= 9.0e-151, "upper bound unsound: {:e}", r.sup());
-        assert!(r.inf() <= 1.1e-150, "lower bound unsound: {:e}", r.inf());
-        assert!(r.inf() >= 2.5e-151, "lower bound too loose: {:e}", r.inf());
+    // The width of `[inf, sup]` in ulps (both endpoints share a binade here).
+    fn ulp_width(r: Interval<f64>) -> u64 {
+        r.sup().to_bits() - r.inf().to_bits()
     }
 
     #[test]
-    fn pown_rev_large_root_is_binade_tight() {
-        // The mirrored branch: c = [1e300, 1e300], n = 2; the true root is
-        // near 1e150, and the doubling construction leaves the bracket
-        // [1, ~root] that the geometric phase must close from below.
+    fn pown_rev_small_root_is_ulp_tight() {
+        // Strengthened from the old binade-tight bound: the `RoundPown`
+        // certification closes the root to the correctly-rounded pair over a
+        // tight backend (adjacent floats) and, over the sound-not-tight fixture
+        // whose loose `sqrt` seeds the bisection, to a bracket a handful of ulps
+        // wide rather than the couple of binades the old bit bisection left.
+        // c = [1e-300, 1e-300], n = 2; the true root is near 1e-150.
+        let r = iv(1e-300, 1e-300).pown_rev(iv(0.0, 1.0), 2);
+        assert!(!r.is_empty());
+        // Correct rounding, weakened only by the fixture's own rounding.
+        assert!(ulp_width(r) <= 4, "bracket too wide: {} ulps", ulp_width(r));
+        // Soundness through the exact forward `pown`: the result squared must
+        // enclose the constraint.
+        let img = iv(r.inf(), r.sup()).pown(2);
+        assert!(
+            img.inf() <= 1e-300 && 1e-300 <= img.sup(),
+            "does not enclose"
+        );
+    }
+
+    #[test]
+    fn pown_rev_large_root_is_ulp_tight() {
+        // The mirrored branch: c = [1e300, 1e300], n = 2; the true root is near
+        // 1e150, seeded from below by the doubling construction. Same
+        // strengthening: a handful of ulps, not a binade.
         let r = iv(1e300, 1e300).pown_rev(iv(0.0, f64::INFINITY), 2);
         assert!(!r.is_empty());
-        assert!(r.sup() <= 4.0e150, "upper bound too loose: {:e}", r.sup());
-        assert!(r.sup() >= 9.0e149, "upper bound unsound: {:e}", r.sup());
-        assert!(r.inf() <= 1.1e150, "lower bound unsound: {:e}", r.inf());
-        assert!(r.inf() >= 2.5e149, "lower bound too loose: {:e}", r.inf());
+        assert!(ulp_width(r) <= 4, "bracket too wide: {} ulps", ulp_width(r));
+        let img = iv(r.inf(), r.sup()).pown(2);
+        assert!(img.inf() <= 1e300 && 1e300 <= img.sup(), "does not enclose");
     }
 
     #[test]
