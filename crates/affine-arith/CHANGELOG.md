@@ -90,16 +90,24 @@ v1.0; before then the API may break between 0.x releases.
 ### Fixed
 
 - The `from_raw_parts` Kani harness put the CI runner at its memory cliff
-  (about 15 million SAT variables for a thirty-line function; the wave-5b
-  merge run died by runner OOM mid-solve). Two property-preserving
-  simplifications landed, a float class split over the `is_finite`/`is_zero`
-  quotient the function actually reads and an id bound of 8 covering every
-  order pattern, and left the formula essentially unchanged: the footprint is
-  the bit-blasted `Vec` and allocator machinery, not the symbolic inputs. The
-  harness stays in the tree as a locally verified proof (about three minutes
-  per discharge) and is temporarily absent from the CI harness list, with
-  notices in the workflow, the module doc, and bead enc-tgw; the CI badge
-  does not attest it until the footprint is understood or the runner grows.
+  (about 15 million SAT variables and 67 million clauses for a proof of a
+  thirty line function; the wave-5b merge run died by runner OOM during the
+  solve). An out of tree ladder localized the cost: the allocator and the
+  pushes sit near 15 thousand variables and the acceptance check near 129
+  thousand, while scanning the returned terms hits 15.2 million. The cost is
+  the scan of a heap `Vec` whose length and contents are symbolic, not the
+  container; the earlier reading, that the footprint was bit blasted `Vec` and
+  allocator machinery, was wrong, and neither the float class split nor a
+  concrete index scan moves it (the concrete index form measured slightly
+  larger). The single proof now splits into three, one property each:
+  `from_raw_parts_acceptance_is_exact` and
+  `from_raw_parts_drops_zero_coefficients` read the outcome without a heap scan,
+  stay near 128 thousand variables, and attest in CI;
+  `from_raw_parts_accepted_form_satisfies_invariant` carries the scan, is
+  verified locally (a minute or two), and stays off the CI harness list until
+  the runner grows or the model checker encodes a bounded but symbolic length
+  slice more tightly. Notices live in the workflow and the module doc. (Bead
+  enc-tgw.)
 
 
 - The condensation Kani harness (`condense_bounds_terms_and_preserves_order`)

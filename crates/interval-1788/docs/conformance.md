@@ -9,7 +9,7 @@ analysis of the test corpus concluded the vectors strengthen evidence
 without retiring those disclosures, and this document inherits that
 conclusion.
 
-**Date of the statements below:** 2026-07-20.
+**Date of the statements below:** 2026-07-22.
 
 ## 1. What is claimed, and to what
 
@@ -125,11 +125,14 @@ datum, so the fix is verified by the lane the day it lands:
   fixture's transcendental margins against a correctly rounded reference;
   property lanes for round-trips, reverse-image soundness, and enclosure;
   Kani harnesses for the discrete skeletons. Kani caveats are recorded at
-  the harnesses: the affine `from_raw_parts` harness is verified locally
-  but temporarily absent from the CI harness list (runner memory; bead
-  enc-tgw), the affine addition-merge harness is cut with its gap recorded,
-  and no Kani harness attests directed-rounding numerics (interval-1788
-  decision record 0003).
+  the harnesses: the affine `from_raw_parts` validation splits into three
+  proofs, of which two (acceptance, and the drop of zero coefficients) attest
+  in CI while the third (the representation invariant over the returned terms)
+  is verified locally and left off the CI harness list, its scan of the
+  returned heap terms running 15 million SAT variables at the runner's memory
+  cliff (bead enc-tgw); the affine addition-merge harness is cut with its gap
+  recorded, and no Kani harness attests directed-rounding numerics
+  (interval-1788 decision record 0003).
 - **The limits:** the corpus is point samples with the registry-documented
   gaps (one Level 2 type, no output vectors, sampling bias); the README
   disclosure carries the named failure mode grounded in exactly those gaps,
