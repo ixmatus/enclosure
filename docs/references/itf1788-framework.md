@@ -96,10 +96,16 @@ consumers:
     in the reverse result; plus the mulRevToPair split invariants)
   - crates/interval-1788/tests/atan2_fixture.rs (the whole atan2.itl transcribed,
     plus the branch-cut and origin decoration cases from libieeep1788_elem.itl)
-  - crates/interval-1788/tests/numeric_boolean_fixture.rs (mid, rad, midRad from
-    libieeep1788_num.itl; equal, less, strictLess, precedes, strictPrecedes and
-    the decorated NaI rule from libieeep1788_bool.itl; the sixteen overlap states,
-    bare and decorated, from libieeep1788_overlap.itl)
+  - crates/interval-1788/tests/numeric_boolean_fixture.rs (from
+    libieeep1788_num.itl: inf, sup, wid, mag, mig, mid, rad, midRad, bare and
+    decorated, inf/sup asserting the Level 2 signed-zero datum bit-exactly; from
+    libieeep1788_bool.itl: isEmpty, isEntire, equal, less, strictLess, precedes,
+    strictPrecedes, bare and decorated, with the decorated NaI rule; from
+    libieeep1788_rec_bool.itl: isSingleton, isCommonInterval, isMember, bare and
+    decorated; from libieeep1788_set.itl: intersection, convexHull, bare and
+    decorated; the sixteen overlap states, bare and decorated, from
+    libieeep1788_overlap.itl. The decorated numeric accessors, unary predicates,
+    set operations, and bare/decorated isCommonInterval/isMember closed enc-ks9)
   - crates/interval-1788/tests/text_io_fixture.rs (textToInterval and
     numsToInterval constructors, bare and decorated, from ieee1788-constructors.itl,
     ieee1788-exceptions.itl, and the textToInterval cases of libieeep1788_class.itl;
@@ -110,9 +116,23 @@ consumers:
     sumSquare, and dot in the nearest mode, including the dot cancellation vector
     that only exact accumulation answers)
 verification:
-  - the reduction vectors (libieeep1788_reduction.itl) are wired into
-    round-float's reduction_conformance.rs over TightF64; the rest of the corpus
-    awaits the interval conformance lane (roadmap work)
+  - (2026-07-22) the interval conformance lane has landed; the corpus is wired in,
+    split by backend. Bit-exact over TightF64: the arithmetic testcases of
+    libieeep1788_elem.itl (conformance_arith_tight.rs), the arithmetic reverses of
+    libieeep1788_rev.itl / libieeep1788_mul_rev.itl / abs_rev.itl
+    (conformance_reverse_tight.rs), and the reductions of
+    libieeep1788_reduction.itl over the Kulisch accumulator
+    (round-float's reduction_conformance.rs). Transcribed as enclosure or exact
+    endpoint-logic lanes over the f64 fixture: the numeric, boolean, rec_bool, and
+    set functions (numeric_boolean_fixture.rs), the elementary and point-function
+    batteries (inverse_fixture.rs, atan2_fixture.rs, trig_pow_fixture.rs,
+    exp_log_fixture.rs, point_functions_fixture.rs), the cancellatives
+    (cancel_fixture.rs), the reverses (reverse_*_fixture.rs), and the text I/O
+    constructors (text_io_fixture.rs). The remaining open items are tightness or
+    decoration divergences, each tracked as a bead with a red-when-run ignored test
+    holding the corpus datum (enc-ghz, enc-5jj, enc-cov, enc-ral, enc-2hd,
+    enc-pzd); see crates/interval-1788/docs/conformance.md section 4. The LGPL
+    vector sets (mpfi.itl, fi_lib.itl, c-xsc.itl) are deliberately not transcribed
 sha256:
   - dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551  vendor/itf1788-framework/COPYING.LESSER
   - cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30  vendor/itf1788-framework/LICENSE

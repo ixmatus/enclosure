@@ -176,15 +176,25 @@ fn eq(r: Interval<TightF64>, lo: f64, hi: f64) {
 
 /// A nonempty result whose endpoints equal `[lo, hi]` bit-for-bit (the sign of a
 /// zero endpoint included). Used only where the corpus pins the zero sign.
+///
+/// Reads the endpoints through the raw [`Interval::bounds`] representation view,
+/// not the `inf`/`sup` numeric functions: those apply the Level 2 signed-zero
+/// datum (a zero infimum reads `-0`, a zero supremum reads `+0`), while these
+/// vectors pin the RAW zero signs the operations produce (the overflow-recip
+/// `pown` rows store `+0` lower from `1/+inf` and `-0` upper from `1/-inf`,
+/// the opposite of the numeric rule). The raw read keeps the corpus's sign
+/// pinning independent of the accessor rule.
 fn eq_bits(r: Interval<TightF64>, lo: f64, hi: f64) {
-    assert!(!r.is_empty(), "expected [{lo}, {hi}], got empty");
+    let Some((rlo, rhi)) = r.bounds() else {
+        panic!("expected [{lo}, {hi}], got empty");
+    };
     assert!(
-        r.inf().0.to_bits() == lo.to_bits() && r.sup().0.to_bits() == hi.to_bits(),
+        rlo.0.to_bits() == lo.to_bits() && rhi.0.to_bits() == hi.to_bits(),
         "expected bits [{:#018x}, {:#018x}], got [{:#018x}, {:#018x}]",
         lo.to_bits(),
         hi.to_bits(),
-        r.inf().0.to_bits(),
-        r.sup().0.to_bits()
+        rlo.0.to_bits(),
+        rhi.0.to_bits()
     );
 }
 

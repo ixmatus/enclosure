@@ -15,6 +15,28 @@ v1.0; before then the API may break between 0.x releases.
   change, now as an explicit signal in the type. Crate decision record 0007
   (bead enc-2hd).
 
+- The decorated and recommended non-arithmetic surface (bead enc-ks9),
+  completing the conformance gaps the lane surfaced. On `DecoratedInterval<F>`:
+  the numeric accessors `inf`, `sup`, `wid`, `mag`, `mig` (bare `RoundFloat`)
+  and `mid`, `rad`, `mid_rad` (behind `RoundLargestFinite`); the unary
+  predicates `is_empty`, `is_entire`, `is_singleton`, `is_common_interval`,
+  `is_member`; and the set operations `intersection` and `convex_hull`. On
+  `Interval<F>`: the recommended `is_common_interval` (nonempty and bounded)
+  and `is_member` (a finite real lies in the interval, the finiteness guard
+  distinguishing it from `contains`, which admits an infinity at a matching
+  infinite endpoint). The decorated numeric accessors return the Level 2 float
+  datum (NaN for a `NaI`, and for the empty interval part of the accessors
+  whose bare form is `None` there) rather than an `Option`, since the corpus
+  pins a plain-float datum; the decorated predicates are `false` on a `NaI`,
+  and the decorated set operations propagate a `NaI` and otherwise grade the
+  bare result `trv` (the non-arithmetic rule the reverses follow). Test lane
+  `tests/numeric_boolean_fixture.rs` transcribes the ITF1788
+  `libieeep1788_num.itl`, `libieeep1788_bool.itl`, `libieeep1788_rec_bool.itl`,
+  and `libieeep1788_set.itl` decorated and recommended testcases 1:1 (262
+  statements); `mid`/`rad`/`midRad` decorated split into live fns and
+  `#[ignore]`d loose twins holding the tight datum, exactly as their bare
+  siblings.
+
 - The conformance document (`docs/conformance.md`, ledger item 13): the
   per-instantiation claim structure (the claim attaches to `TightF64`, never
   the generic crate), the operation and naming map, the lane's certified
@@ -49,11 +71,11 @@ v1.0; before then the API may break between 0.x releases.
   three-ulp brackets for exponent magnitude three and above, 44 vectors
   (enc-cov, an erratum owed to decision record 0006 part 3), and its
   negative-exponent path saturates the set-level reciprocal at the subnormal
-  edge, 8 vectors (enc-ral). The decorated conformance surface lacks
-  numeric accessors, unary predicates, set operations, and
-  `isCommonInterval`/`isMember` (enc-ks9). Every non-tight result above is a
+  edge, 8 vectors (enc-ral). Every non-tight result above is a
   verified sound enclosure; the lane found no soundness violation anywhere
-  in the corpus.
+  in the corpus. (The decorated numeric-accessor, unary-predicate, set-
+  operation, and `isCommonInterval`/`isMember` gap the lane also surfaced,
+  enc-ks9, is resolved in the Added section above.)
 
 - The reverse operations on `Interval<F>` and `DecoratedInterval<F>`, in a new
   `reverse` module, each in its explicit-candidate form
@@ -390,6 +412,17 @@ v1.0; before then the API may break between 0.x releases.
   endpoint-wise under a parity and zero-position case table. The former
   known-defect twin `minimal_pown_test_known_defect` is retired. Round-float
   decision record 0004; workspace decision record 0007 erratum.
+- `Interval::inf` and `Interval::sup` now return the Level 2 signed-zero datum: a
+  zero infimum reads `-0`, a zero supremum reads `+0`, whatever sign the stored
+  endpoint carries (so `inf([0, +inf])` is `-0`, where the accessor previously
+  passed the stored `+0` through). This makes the bare numeric functions agree
+  bit-exactly with the corpus and with the new decorated `inf`/`sup`; the
+  `minimal_inf_test`/`minimal_sup_test` zero-endpoint vectors now assert the sign
+  bit-exactly rather than value-equally. The text serialization (`Display`,
+  `interval_to_exact`) is unaffected: it reads the raw stored endpoints so a
+  printed interval still round-trips bit for bit; only the numeric functions and
+  the stored representation part ways, and only on the sign of a zero. Bead
+  enc-ks9.
 - Decorated `+`, `-`, `*`, `/`, `recip`, `sqr`, `sqrt`, and `mul_add` no longer
   pack `com` with an overflowed unbounded result. A bounded operation can reach
   `[lo, +inf]`, and `com` promises a bounded result, so the shared `pack` seam

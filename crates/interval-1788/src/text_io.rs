@@ -1506,10 +1506,14 @@ impl fmt::Display for Interval<f64> {
         if self.is_entire() {
             return f.write_str("[entire]");
         }
+        // Serialize the raw stored endpoints, not the numeric `inf`/`sup` (which
+        // impose the Level 2 signed-zero datum): the text form reproduces the
+        // interval so a reread reconstructs the same stored endpoints.
+        let (lo, hi) = self.bounds().expect("nonempty past the empty guard");
         f.write_str("[")?;
-        write_decimal_endpoint(f, self.inf())?;
+        write_decimal_endpoint(f, lo)?;
         f.write_str(", ")?;
-        write_decimal_endpoint(f, self.sup())?;
+        write_decimal_endpoint(f, hi)?;
         f.write_str("]")
     }
 }
@@ -1524,10 +1528,14 @@ impl fmt::Display for ExactInterval {
         if self.0.is_empty() {
             return f.write_str("[empty]");
         }
+        // Raw stored endpoints (sign of zero included), so the exact hex form
+        // round-trips bit for bit; the numeric `inf`/`sup` would mask the stored
+        // sign under the Level 2 signed-zero datum.
+        let (lo, hi) = self.0.bounds().expect("nonempty past the empty guard");
         f.write_str("[")?;
-        write_exact_endpoint(f, self.0.inf())?;
+        write_exact_endpoint(f, lo)?;
         f.write_str(", ")?;
-        write_exact_endpoint(f, self.0.sup())?;
+        write_exact_endpoint(f, hi)?;
         f.write_str("]")
     }
 }
