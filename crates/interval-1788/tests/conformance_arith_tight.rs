@@ -180,6 +180,15 @@ fn eq(r: Interval<TightF64>, lo: f64, hi: f64) {
 
 /// A nonempty result whose endpoints equal `[lo, hi]` bit-for-bit (the sign of a
 /// zero endpoint included). Used only where the corpus pins the zero sign.
+///
+/// Reads the endpoints through `inf`/`sup`, which since the enc-ks9 slice apply
+/// the Level 2 signed-zero datum (`inf` of a zero infimum is `-0`, `sup` of a zero
+/// supremum is `+0`). The overflow-recip pown vectors below store the opposite raw
+/// signs (`+0` lower from `1/+inf`, `-0` upper from `1/-inf`), so once `pown` gains
+/// a tight path and this test runs, the raw-sign pinning must move off `inf`/`sup`
+/// onto the exact-text form (`interval_to_exact`, which serializes the stored
+/// endpoints). The test is ignored today for the tightness defect, so the reads
+/// never reach these vectors; the note records the interaction for the pown fix.
 fn eq_bits(r: Interval<TightF64>, lo: f64, hi: f64) {
     assert!(!r.is_empty(), "expected [{lo}, {hi}], got empty");
     assert!(

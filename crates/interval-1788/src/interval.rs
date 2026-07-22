@@ -134,26 +134,39 @@ impl<F: RoundFloat> Interval<F> {
         }
     }
 
-    /// The infimum (lower endpoint).
+    /// The infimum (lower endpoint), as the standard's Level 2 numeric datum.
     ///
     /// By the standard's convention the infimum of the empty interval is plus
-    /// infinity, so the accessor is total.
+    /// infinity, so the accessor is total. A zero infimum reads out as negative
+    /// zero: IEEE 1788's Level 2 `inf` pins the sign of a zero result to `-0`
+    /// whatever sign the stored endpoint carries, so `inf([0, +inf])` is `-0`. This
+    /// is the numeric function; the raw stored endpoint, which the text
+    /// serialization reproduces for round-trip fidelity, is read from the interval
+    /// representation directly, not through this accessor.
     #[must_use]
     pub fn inf(&self) -> F {
         match self.repr {
             Repr::Empty => F::INFINITY,
+            // A zero infimum reads out as `-0` (the Level 2 numeric datum); every
+            // other endpoint reads out unchanged.
+            Repr::NonEmpty { lo, .. } if lo.is_zero() => F::ZERO.negate(),
             Repr::NonEmpty { lo, .. } => lo,
         }
     }
 
-    /// The supremum (upper endpoint).
+    /// The supremum (upper endpoint), as the standard's Level 2 numeric datum.
     ///
     /// By the standard's convention the supremum of the empty interval is minus
-    /// infinity, so the accessor is total.
+    /// infinity, so the accessor is total. A zero supremum reads out as positive
+    /// zero: IEEE 1788's Level 2 `sup` pins the sign of a zero result to `+0`, the
+    /// mirror of the [`inf`](Interval::inf) rule. This is the numeric function,
+    /// distinct from the raw stored endpoint the text serialization reproduces.
     #[must_use]
     pub fn sup(&self) -> F {
         match self.repr {
             Repr::Empty => F::NEG_INFINITY,
+            // A zero supremum reads out as `+0` (the Level 2 numeric datum).
+            Repr::NonEmpty { hi, .. } if hi.is_zero() => F::ZERO,
             Repr::NonEmpty { hi, .. } => hi,
         }
     }
@@ -165,6 +178,32 @@ impl<F: RoundFloat> Interval<F> {
             Repr::Empty => false,
             Repr::NonEmpty { lo, hi } => lo <= x && x <= hi,
         }
+    }
+
+    /// Whether this is a common interval: nonempty and bounded (the recommended
+    /// `isCommonInterval`).
+    ///
+    /// `Entire` and the half-unbounded intervals are not common (they are
+    /// unbounded), and the empty interval is not common (it is empty). Every other
+    /// interval is a closed bounded nonempty `[a, b]` and is common.
+    #[must_use]
+    pub fn is_common_interval(&self) -> bool {
+        !self.is_empty() && self.is_bounded()
+    }
+
+    /// Whether the finite real number `m` is a member of this interval (the
+    /// recommended `isMember`).
+    ///
+    /// Membership requires `m` to be a finite real: no infinity is a member of any
+    /// interval, not even one whose endpoint is that infinity. So this is stricter
+    /// than [`contains`](Interval::contains), which admits an infinite argument at
+    /// a matching infinite endpoint: `entire.contains(+inf)` is `true` but
+    /// `entire.is_member(+inf)` is `false`. A NaN argument is never a member. The
+    /// finiteness guard is load bearing precisely because `contains` alone would
+    /// answer the infinite-endpoint cases the wrong way.
+    #[must_use]
+    pub fn is_member(&self, m: F) -> bool {
+        m.is_finite() && self.contains(m)
     }
 
     /// The endpoints, or `None` for the empty interval. Crate-internal so the

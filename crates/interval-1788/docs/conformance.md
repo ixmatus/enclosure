@@ -9,7 +9,7 @@ analysis of the test corpus concluded the vectors strengthen evidence
 without retiring those disclosures, and this document inherits that
 conclusion.
 
-**Date of the statements below:** 2026-07-20.
+**Date of the statements below:** 2026-07-22.
 
 ## 1. What is claimed, and to what
 
@@ -79,6 +79,30 @@ complete and faithful. Certified today:
   backend: every non-tight result the lane surfaced is a verified sound
   enclosure.
 
+Added 2026-07-22 (bead enc-ks9, resolving section 4 item 5): the decorated
+and recommended non-arithmetic surface, transcribed over the `f64` fixture.
+The endpoint-logic families carry no rounding, so their results are bit-exact
+on any backend; `mid`/`rad`/`midRad` decorated split into a live fn and an
+ignored twin holding the tight datum, exactly as their bare siblings do.
+
+- Decorated numeric accessors `inf`/`sup`/`wid`/`mag`/`mig`/`mid`/`rad`/
+  `midRad`: 15 + 15 + 9 + 9 + 12 + 13 + 10 + 13 = 96 vectors (of the 36 for
+  `mid`/`rad`/`midRad`, 20 are live and 16 sit in ignored loose twins). The
+  accessors return the Level 2 float datum, NaN included, where the bare forms
+  return `Option`; `inf`/`sup` gained the Level 2 signed-zero datum (a zero
+  infimum reads `-0`, a zero supremum `+0`), and the affected bare vectors now
+  assert the sign bit-exactly.
+- Decorated unary predicates `isEmpty`/`isEntire`/`isSingleton`:
+  15 + 17 + 16 = 48 vectors.
+- `isCommonInterval` and `isMember`, bare against the real API and decorated:
+  bare 12 + 35 = 47, decorated 21 + 40 = 61 vectors. The decorated `isMember`
+  file holds 40 statements covering 38 distinct vectors (the corpus repeats two
+  `[empty]_trv = false` lines verbatim; both are transcribed and marked).
+- Decorated set operations `intersection`/`convexHull`: 5 + 5 = 10 vectors,
+  each pinning the interval part and the propagated `trv`.
+
+Total: 96 + 48 + 61 + 47 + 10 = 262 statements.
+
 ## 4. Open items between today and the claim
 
 Each is a tracked bead with a red-when-run ignored test holding the corpus
@@ -96,9 +120,11 @@ datum, so the fix is verified by the lane the day it lands:
    edge (8 vectors, bead enc-ral).
 4. **`set_dec` returns `NaI` where the standard's `setDec` clamps** (6
    vectors, bead enc-2hd); conform-or-declare is an open decision.
-5. **The decorated surface lacks** numeric accessors, unary predicates, set
-   operations, and `isCommonInterval`/`isMember` (bead enc-ks9); the bare
-   forms are covered, two via documented compositions.
+5. **Resolved 2026-07-22 (bead enc-ks9).** The decorated numeric accessors,
+   decorated unary predicates, decorated set operations, and bare and decorated
+   `isCommonInterval`/`isMember` are now surfaced and transcribed 1:1 (section 3,
+   the 2026-07-22 additions). The bare `inf`/`sup` gained the Level 2 signed-zero
+   datum in the same slice, so bare and decorated agree bit-exactly.
 6. **The decorated `mulRevToPair` doctrine is unresolved** (bead enc-pzd):
    the draft-era corpus propagates decorations through the two-output
    division where this crate grades `trv` per decision record 0006 part 5.
