@@ -14,6 +14,20 @@
 //! Run with `cargo kani -p affine-arith --features fixture`; gated on `fixture`
 //! for the `f64` instance of [`RoundFloat`](round_float::RoundFloat).
 //!
+//! # The from_raw_parts trio
+//!
+//! The serialization validation splits across three harnesses, one property
+//! each, so CBMC gives each its own process and the two cheap ones attest in CI
+//! while the costly one stays local. `from_raw_parts_acceptance_is_exact` carries
+//! property 1 (acceptance is exactly a finite center and coefficients with
+//! strictly ascending ids). `from_raw_parts_drops_zero_coefficients` carries
+//! property 3 (an accepted form's term count is its nonzero coefficient count).
+//! `from_raw_parts_accepted_form_satisfies_invariant` carries property 2 (an
+//! accepted form meets the representation invariant); it scans the returned heap
+//! terms and runs 15.2 million SAT variables, so it is verified locally and left
+//! off the CI harness list. Its doc comment carries the CI NOTICE and the
+//! measured scaling law.
+//!
 //! # Why the numeric enclosure is not proven here
 //!
 //! The enclosure theorem, that a form's reduction contains its true value set,
@@ -209,17 +223,18 @@ fn fresh_at_exhaustion_panics() {
 
 // --- Group 2: from_raw_parts validation ---
 
-/// `from_raw_parts` accepts exactly the faithful serializations (finite center
-/// and coefficients, strictly ascending ids), and an accepted form satisfies the
-/// representation invariant with zero coefficients dropped.
-/// A symbolic float CLASS mapped to a concrete representative. `from_raw_parts`
-/// and the invariant scan read a value only through `is_finite` and
-/// `is_zero`/`== 0.0`, never its bits (verified against `form.rs`), so behavior
-/// is invariant under this quotient and four representatives cover every branch
-/// a raw `f64` could take. Raw symbolic floats here once cost 15 million SAT
-/// variables per property and put the CI runner at its memory cliff (the
-/// wave-5b kani job died of runner OOM mid-solve); the class split removes the
-/// float bits from the formula while proving the same statement.
+/// A symbolic float class mapped to a concrete representative. `from_raw_parts`
+/// and the invariant scan read a value only through `is_finite` and `is_zero`
+/// (`== 0.0`), never its bits: the `f64` fixture implements both as the plain
+/// intrinsic and a compare against zero (verified against round-float's
+/// `f64_impl.rs`), so behavior is invariant under this quotient and four
+/// representatives cover every branch a raw `f64` could take.
+///
+/// The class split costs almost nothing and buys almost nothing. An out of tree
+/// ladder measured the acceptance check over raw symbolic `f64` at 127,260 SAT
+/// variables and over the class split at 127,192, a gap of 68. The float bits
+/// were never the footprint; the scan of the returned terms is, and its numbers
+/// live on the invariant harness below.
 fn class_rep(k: u8) -> f64 {
     match k {
         0 => 1.0,
@@ -229,17 +244,19 @@ fn class_rep(k: u8) -> f64 {
     }
 }
 
-/// CI NOTICE (bead enc-tgw): this harness is temporarily absent from the CI
-/// kani job's harness list. Its formula runs about 15 million SAT variables
-/// (bit-blasted `Vec`/allocator machinery, not the symbolic inputs; the class
-/// split and id bound below barely moved it) and sits at the standard
-/// runner's memory cliff, which killed the wave-5b run by runner OOM. It is
-/// verified locally (about three minutes; observations dated in the bead) and
-/// rejoins CI when the footprint is understood or the runner grows. The CI
-/// badge does not attest this harness until then.
-#[kani::proof]
-#[kani::unwind(4)]
-fn from_raw_parts_accepts_exactly_faithful_input() {
+/// The symbolic inputs the three `from_raw_parts` harnesses share: a center and
+/// three coefficients drawn as float classes, three ids bounded to 8, assembled
+/// into the raw serialization and run through `from_raw_parts`. Each harness
+/// reads one facet of the outcome, so the original single proof becomes three
+/// proofs that assert one property apiece and take one CBMC process each.
+struct RawPartsCase {
+    result: Option<AffineForm<'static, f64>>,
+    ascending: bool,
+    finite: bool,
+    coeffs: [f64; 3],
+}
+
+fn from_raw_parts_case() -> RawPartsCase {
     let kc: u8 = kani::any();
     let k0: u8 = kani::any();
     let k1: u8 = kani::any();
@@ -249,11 +266,10 @@ fn from_raw_parts_accepts_exactly_faithful_input() {
     let c0 = class_rep(k0);
     let c1 = class_rep(k1);
     let c2 = class_rep(k2);
-    // The id logic is pure ordering (strict ascent or not), so ids under a
-    // small bound realize every order pattern three ids can take; 8 gives
-    // slack for equalities and both violation directions while keeping each
-    // id to three symbolic bits (the raw 64-bit ids were the residual formula
-    // cost after the class split above).
+    // The id logic is pure ordering (strict ascent or not), so ids under a small
+    // bound realize every order pattern three ids can take; 8 gives slack for
+    // equalities and both violation directions while keeping each id to three
+    // symbolic bits.
     let id0: u64 = kani::any();
     let id1: u64 = kani::any();
     let id2: u64 = kani::any();
@@ -262,24 +278,80 @@ fn from_raw_parts_accepts_exactly_faithful_input() {
     let raw = [(id0, c0), (id1, c1), (id2, c2)];
     let ascending = id0 < id1 && id1 < id2;
     let finite = center.is_finite() && c0.is_finite() && c1.is_finite() && c2.is_finite();
-
     let result = AffineForm::<f64>::from_raw_parts(center, raw);
+    RawPartsCase {
+        result,
+        ascending,
+        finite,
+        coeffs: [c0, c1, c2],
+    }
+}
+
+/// Property 1 of 3: `from_raw_parts` accepts exactly the faithful serializations,
+/// a finite center and coefficients with strictly ascending ids. Reading the
+/// outcome as a boolean touches no heap, so the formula stays near 129 thousand
+/// SAT variables and this harness runs in CI.
+#[kani::proof]
+#[kani::unwind(4)]
+fn from_raw_parts_acceptance_is_exact() {
+    let case = from_raw_parts_case();
     kani::assert(
-        result.is_some() == (ascending && finite),
+        case.result.is_some() == (case.ascending && case.finite),
         "acceptance is exactly strictly-ascending ids with a finite center and coefficients",
     );
+}
 
-    if let Some(form) = result {
-        kani::assert(
-            invariant_holds(form.terms()),
-            "an accepted form satisfies the representation invariant",
-        );
-        // Zero coefficients are dropped: the term count is the number of nonzero
-        // inputs (all coefficients are finite on this branch).
-        let nonzero = usize::from(c0 != 0.0) + usize::from(c1 != 0.0) + usize::from(c2 != 0.0);
+/// Property 3 of 3: an accepted form drops its zero coefficients and keeps the
+/// nonzero ones, so its term count equals the number of nonzero input
+/// coefficients. Reading only the result length touches no heap scan, so the
+/// formula stays near 128 thousand SAT variables and this harness runs in CI.
+#[kani::proof]
+#[kani::unwind(4)]
+fn from_raw_parts_drops_zero_coefficients() {
+    let case = from_raw_parts_case();
+    if let Some(form) = case.result {
+        let nonzero = usize::from(case.coeffs[0] != 0.0)
+            + usize::from(case.coeffs[1] != 0.0)
+            + usize::from(case.coeffs[2] != 0.0);
         kani::assert(
             form.num_terms() == nonzero,
             "zero coefficients are dropped, nonzero ones kept",
+        );
+    }
+}
+
+/// CI NOTICE (bead enc-tgw): this is the one property of the `from_raw_parts`
+/// trio absent from the CI kani job's harness list. Property 2 of 3: an accepted
+/// form satisfies the representation invariant, its terms strictly ascending by
+/// id with no zero coefficient.
+///
+/// It is absent because it scans the returned terms, and scanning a heap `Vec`
+/// whose length and contents are both symbolic is the cost the CI runner cannot
+/// afford. The scan runs about 15.2 million SAT variables and 67 million clauses
+/// and peaks between 14 and 23 GiB depending on the solver's search, the standard
+/// runner's memory cliff that killed the wave-5b run by runner OOM. The container
+/// is not the cost: an out of tree ladder put the allocator and the pushes near
+/// 15 thousand variables and the acceptance check near 129 thousand, while the
+/// same construction scanned back through the invariant hit 15.2 million. Walking
+/// it differently does not rescue it, since a concrete index scan under a length
+/// guard measured slightly larger than the iterator scan; the symbolic heap
+/// buffer itself is the cost, not the traversal. The earlier note blamed bit
+/// blasted `Vec` and allocator machinery, which the ladder falsified; the numbers
+/// here are the correction.
+///
+/// The two cheap properties above attest in CI. This one is verified locally
+/// (a minute or two) and rejoins CI when the runner grows or the model checker
+/// gains a tighter encoding for scanning a bounded but symbolic length slice (the
+/// upstream issue recorded in the bead). The CI badge does not attest this single
+/// property until then.
+#[kani::proof]
+#[kani::unwind(4)]
+fn from_raw_parts_accepted_form_satisfies_invariant() {
+    let case = from_raw_parts_case();
+    if let Some(form) = case.result {
+        kani::assert(
+            invariant_holds(form.terms()),
+            "an accepted form satisfies the representation invariant",
         );
     }
 }
