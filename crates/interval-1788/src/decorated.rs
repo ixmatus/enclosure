@@ -48,7 +48,18 @@ use core::ops::{Add, Div, Mul, Neg, Sub};
 use crate::decoration::Decoration;
 use crate::functions::Overlap;
 use crate::interval::Interval;
-use round_float::{RoundFloat, RoundInteger};
+use round_float::{RoundFloat, RoundInteger, RoundLargestFinite};
+
+/// A NaN of the backend float type: the Level 2 datum a decorated numeric accessor
+/// returns where the standard writes NaN. That is the `NaI` case for every accessor
+/// and, additionally, the empty interval part for `wid`/`mag`/`mig`/`mid`/`rad`/
+/// `mid_rad`, whose bare forms are `None` there. The core [`RoundFloat`] trait
+/// carries no NaN constant (it is deliberately frozen), so the value is synthesized
+/// as `+inf - +inf`, which is NaN under every rounding direction.
+#[inline]
+fn nan<F: RoundFloat>() -> F {
+    F::INFINITY.sub_up(F::INFINITY)
+}
 
 /// Whether an interval is bounded and nonempty (so a continuous operation on it
 /// yields a bounded nonempty result, the precondition for `com`).
@@ -193,15 +204,59 @@ impl<F: RoundFloat> DecoratedInterval<F> {
         Self { x, d }
     }
 
-    /// Pair an interval with an explicit decoration, or return [`nai`](DecoratedInterval::nai)
-    /// if the combination is inconsistent (for example `com` with an unbounded
-    /// interval, or `ill` with a nonempty one).
+    /// Pair an interval with an explicit decoration, clamping an inconsistent
+    /// pair down to the strongest decoration the interval can carry, exactly as
+    /// the standard's `setDec`. This is the total conforming constructor: it
+    /// returns a valid decorated interval for every `(x, d)`.
+    ///
+    /// The clamp only ever weakens `d`; it never strengthens it. [`new_dec`](DecoratedInterval::new_dec)
+    /// gives the strongest decoration `x` admits (`com` for a bounded nonempty
+    /// interval, `dac` for an unbounded nonempty one, `trv` for the empty
+    /// interval), and the lattice [`meet`](Decoration::meet) lowers `d` to it:
+    ///
+    /// - a consistent pair passes through unchanged, since `d` already sits at or
+    ///   below the strongest and the meet returns `d`;
+    /// - `com` on an unbounded interval clamps to `dac`, because `com` promises a
+    ///   bounded result the unbounded interval cannot honor (the same demotion
+    ///   the `pack` seam applies to an overflowed operation result);
+    /// - every decoration other than `ill` on the empty interval clamps to
+    ///   `trv`, because `com`, `dac`, and `def` each assert a nonempty interval;
+    /// - `ill` decorates `NaI` alone. The standard treats a request for `ill` as
+    ///   an attempt to construct `NaI` and raises `UndefinedOperation`; this
+    ///   crate reports that as the returned `NaI` value. So `set_dec(_, ill)` is
+    ///   `NaI` whether or not the interval is empty, and `ill` never decorates
+    ///   the given interval.
+    ///
+    /// Reach for [`try_set_dec`](DecoratedInterval::try_set_dec) instead when an
+    /// inconsistent pair should surface as a visible error rather than a silent
+    /// weakening: it returns `None` on exactly the pairs this constructor clamps.
     #[must_use]
     pub fn set_dec(x: Interval<F>, d: Decoration) -> Self {
+        if d == Decoration::Ill {
+            return Self::nai();
+        }
+        let d = d.meet(Self::new_dec(x).decoration());
+        Self { x, d }
+    }
+
+    /// The strict counterpart of [`set_dec`](DecoratedInterval::set_dec): pair an
+    /// interval with an explicit decoration only when the pair is already
+    /// consistent, returning `None` for any inconsistent combination instead of
+    /// clamping. This constructor makes misuse visible; the `None` is a signal
+    /// in the type a caller can match on, in place of a poisoned `NaI` value.
+    ///
+    /// A pair is consistent when `com` carries a bounded nonempty interval, `dac`
+    /// and `def` carry a nonempty interval, `ill` carries the empty interval (the
+    /// `NaI`), and `trv` carries any interval. So `try_set_dec(x, ill)` is
+    /// `Some(nai())` when `x` is empty and `None` otherwise. Wherever
+    /// [`set_dec`](DecoratedInterval::set_dec) would weaken the decoration, this
+    /// returns `None`.
+    #[must_use]
+    pub fn try_set_dec(x: Interval<F>, d: Decoration) -> Option<Self> {
         if valid_combo(x, d) {
-            Self { x, d }
+            Some(Self { x, d })
         } else {
-            Self::nai()
+            None
         }
     }
 
@@ -450,6 +505,165 @@ impl<F: RoundFloat> DecoratedInterval<F> {
     #[must_use]
     pub fn overlap(self, other: Self) -> Overlap {
         self.x.overlap(other.x)
+    }
+
+    // --- Unary predicates on the interval part ------------------------------
+    //
+    // Each reads the interval part, with the one rule the vectors pin: a `NaI` is
+    // excluded first. A `NaI`'s interval part is the empty set, so without the
+    // guard `is_empty` would wrongly report `true` for a `NaI`; the corpus fixes
+    // `isEmpty [nai] = false`, and the other predicates are `false` on a `NaI` for
+    // the same reason (nothing is asserted about a `NaI`'s shape).
+
+    /// Whether the interval part is empty (the decorated `isEmpty`). A `NaI` is not
+    /// empty by this predicate: `isEmpty [nai] = false`.
+    #[must_use]
+    pub fn is_empty(self) -> bool {
+        !self.is_nai() && self.x.is_empty()
+    }
+
+    /// Whether the interval part is `Entire` (the decorated `isEntire`). `false`
+    /// for a `NaI`.
+    #[must_use]
+    pub fn is_entire(self) -> bool {
+        !self.is_nai() && self.x.is_entire()
+    }
+
+    /// Whether the interval part is a singleton (the decorated `isSingleton`).
+    /// `false` for a `NaI`.
+    #[must_use]
+    pub fn is_singleton(self) -> bool {
+        !self.is_nai() && self.x.is_singleton()
+    }
+
+    /// Whether the interval part is a common interval, nonempty and bounded (the
+    /// decorated `isCommonInterval`). `false` for a `NaI`.
+    #[must_use]
+    pub fn is_common_interval(self) -> bool {
+        !self.is_nai() && self.x.is_common_interval()
+    }
+
+    /// Whether the finite real `m` is a member of the interval part (the decorated
+    /// `isMember`). `false` for a `NaI`; otherwise the bare
+    /// [`Interval::is_member`] of the interval part, with its finiteness guard.
+    #[must_use]
+    pub fn is_member(self, m: F) -> bool {
+        !self.is_nai() && self.x.is_member(m)
+    }
+
+    // --- Numeric accessors on the interval part -----------------------------
+    //
+    // These return the backend float directly rather than an `Option`, because the
+    // Level 2 datum they must reproduce is a plain float, NaN included: the corpus
+    // writes `NaN` for a `NaI` (and for the empty interval part of the accessors
+    // whose bare form is `None` there). The bare numeric functions keep the
+    // `Option` surface (`None` for empty) so the empty case stays explicit in the
+    // type; the decorated forms drop it and follow the standard's Level 2 datum the
+    // vectors pin, mapping every `None`/`NaI` to NaN through the shared [`nan`]
+    // helper. `inf`/`sup` must special-case `NaI` (a `NaI`'s empty interval part has
+    // bare `inf` `+inf`, not NaN); `wid`/`mag`/`mig` need no special case, since a
+    // `NaI` reads through its empty interval part to `None`, which maps to NaN.
+
+    /// The infimum of the interval part, as the standard's Level 2 numeric datum
+    /// (the decorated `inf`). A `NaI` returns NaN; every other value is the bare
+    /// [`Interval::inf`], signed-zero rule included (`inf [0, +inf]` is `-0`).
+    #[must_use]
+    pub fn inf(self) -> F {
+        if self.is_nai() {
+            nan()
+        } else {
+            self.x.inf()
+        }
+    }
+
+    /// The supremum of the interval part, as the standard's Level 2 numeric datum
+    /// (the decorated `sup`). A `NaI` returns NaN; every other value is the bare
+    /// [`Interval::sup`], signed-zero rule included.
+    #[must_use]
+    pub fn sup(self) -> F {
+        if self.is_nai() {
+            nan()
+        } else {
+            self.x.sup()
+        }
+    }
+
+    /// The width of the interval part (the decorated `wid`). NaN for a `NaI` or an
+    /// empty interval part (the bare `None`), both of which read through to NaN.
+    #[must_use]
+    pub fn wid(self) -> F {
+        self.x.wid().unwrap_or_else(nan)
+    }
+
+    /// The magnitude of the interval part (the decorated `mag`). NaN for a `NaI` or
+    /// an empty interval part.
+    #[must_use]
+    pub fn mag(self) -> F {
+        self.x.mag().unwrap_or_else(nan)
+    }
+
+    /// The mignitude of the interval part (the decorated `mig`). NaN for a `NaI` or
+    /// an empty interval part.
+    #[must_use]
+    pub fn mig(self) -> F {
+        self.x.mig().unwrap_or_else(nan)
+    }
+
+    // --- Set operations on the interval part --------------------------------
+    //
+    // The non-arithmetic rule the reverse operations already follow: a `NaI`
+    // propagates; otherwise the bare set operation is taken and the result carries
+    // `trv`, the only decoration a set operation earns (it makes no definedness or
+    // continuity promise about its result). Trv is a valid decoration for any
+    // interval, so `pack` keeps it unchanged.
+
+    /// The set intersection of the interval parts, decorated `trv` (the decorated
+    /// `intersection`). A `NaI` operand propagates to a `NaI` result.
+    #[must_use]
+    pub fn intersection(self, other: Self) -> Self {
+        if self.is_nai() || other.is_nai() {
+            return Self::nai();
+        }
+        Self::pack(self.x.intersection(other.x), Decoration::Trv)
+    }
+
+    /// The convex hull of the interval parts, decorated `trv` (the decorated
+    /// `convexHull`). The companion of [`intersection`](DecoratedInterval::intersection),
+    /// with the same `NaI`-propagate, otherwise-`trv` rule.
+    #[must_use]
+    pub fn convex_hull(self, other: Self) -> Self {
+        if self.is_nai() || other.is_nai() {
+            return Self::nai();
+        }
+        Self::pack(self.x.convex_hull(other.x), Decoration::Trv)
+    }
+}
+
+impl<F: RoundFloat + RoundLargestFinite> DecoratedInterval<F> {
+    /// The midpoint of the interval part, as the standard's Level 2 numeric datum
+    /// (the decorated `mid`). NaN for a `NaI` or an empty interval part; otherwise
+    /// the bare [`Interval::mid`] (the half-unbounded realmax convention and the
+    /// fixture's bounded looseness are documented there). Returns the float
+    /// directly rather than an `Option`, for the reason the [`inf`](DecoratedInterval::inf)
+    /// family gives: the Level 2 datum is a plain float, NaN included.
+    #[must_use]
+    pub fn mid(self) -> F {
+        self.x.mid().unwrap_or_else(nan)
+    }
+
+    /// The radius of the interval part (the decorated `rad`). NaN for a `NaI` or an
+    /// empty interval part; `+inf` for an unbounded interval part.
+    #[must_use]
+    pub fn rad(self) -> F {
+        self.x.rad().unwrap_or_else(nan)
+    }
+
+    /// The midpoint paired with the radius of the interval part (the decorated
+    /// `midRad`). `(NaN, NaN)` for a `NaI` or an empty interval part; otherwise the
+    /// bare [`Interval::mid_rad`].
+    #[must_use]
+    pub fn mid_rad(self) -> (F, F) {
+        self.x.mid_rad().unwrap_or_else(|| (nan(), nan()))
     }
 }
 
@@ -799,20 +1013,46 @@ mod tests {
     }
 
     #[test]
-    fn set_dec_rejects_inconsistent_combinations() {
-        // com with an unbounded interval is inconsistent -> NaI.
-        let bad = DecoratedInterval::set_dec(
-            Interval::<f64>::new(0.0, f64::INFINITY).unwrap(),
-            Decoration::Com,
+    fn set_dec_clamps_and_try_set_dec_is_strict() {
+        let unbounded = Interval::<f64>::new(0.0, f64::INFINITY).unwrap();
+        let bounded = Interval::<f64>::new(1.0, 2.0).unwrap();
+
+        // set_dec conforms: com on an unbounded interval clamps to dac.
+        let clamped = DecoratedInterval::set_dec(unbounded, Decoration::Com);
+        assert!(!clamped.is_nai());
+        assert_eq!(clamped.interval(), unbounded);
+        assert_eq!(clamped.decoration(), Decoration::Dac);
+
+        // A decoration other than ill on the empty interval clamps to trv.
+        let empty_clamped = DecoratedInterval::set_dec(Interval::<f64>::empty(), Decoration::Com);
+        assert!(!empty_clamped.is_nai());
+        assert!(empty_clamped.interval().is_empty());
+        assert_eq!(empty_clamped.decoration(), Decoration::Trv);
+
+        // ill collapses to NaI whether or not the interval is empty.
+        assert!(DecoratedInterval::set_dec(bounded, Decoration::Ill).is_nai());
+        assert!(DecoratedInterval::set_dec(Interval::<f64>::empty(), Decoration::Ill).is_nai());
+
+        // A consistent pair passes through unchanged.
+        let kept = DecoratedInterval::set_dec(bounded, Decoration::Def);
+        assert_eq!(kept.decoration(), Decoration::Def);
+
+        // try_set_dec is strict: None on exactly the pairs set_dec clamps.
+        assert!(DecoratedInterval::try_set_dec(unbounded, Decoration::Com).is_none());
+        assert!(
+            DecoratedInterval::try_set_dec(Interval::<f64>::empty(), Decoration::Com).is_none()
         );
-        assert!(bad.is_nai());
-        // ill with a nonempty interval is inconsistent -> NaI.
-        let bad2 =
-            DecoratedInterval::set_dec(Interval::<f64>::new(1.0, 2.0).unwrap(), Decoration::Ill);
-        assert!(bad2.is_nai());
-        // A consistent combination is kept.
-        let ok =
-            DecoratedInterval::set_dec(Interval::<f64>::new(1.0, 2.0).unwrap(), Decoration::Def);
-        assert_eq!(ok.decoration(), Decoration::Def);
+        assert!(DecoratedInterval::try_set_dec(bounded, Decoration::Ill).is_none());
+        // A consistent pair is Some, and empty+ill is the strict NaI.
+        assert_eq!(
+            DecoratedInterval::try_set_dec(bounded, Decoration::Def)
+                .map(DecoratedInterval::decoration),
+            Some(Decoration::Def)
+        );
+        assert!(
+            DecoratedInterval::try_set_dec(Interval::<f64>::empty(), Decoration::Ill)
+                .unwrap()
+                .is_nai()
+        );
     }
 }

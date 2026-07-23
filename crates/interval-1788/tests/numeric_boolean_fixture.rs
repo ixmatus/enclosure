@@ -23,18 +23,21 @@
 //! # What is exact, what is sound-not-tight
 //!
 //! - `inf`, `sup`, `mag`, `mig` are pure endpoint or magnitude reads with no
-//!   rounding: pinned exactly. (A signed zero at an endpoint is asserted at the
-//!   Level 2 value, where `-0.0 == +0.0`; the fixture's `inf([0, +inf])` returns
-//!   `+0.0` where the corpus writes `-0.0`, a harmless representation-of-zero
-//!   difference the value assertion is blind to by design.)
+//!   rounding: pinned exactly, the sign of a zero included. `inf` and `sup` apply
+//!   the Level 2 signed-zero datum (a zero infimum reads `-0`, a zero supremum
+//!   reads `+0`), so the zero-endpoint vectors assert bit-exactly, not value-
+//!   equally. The text serialization keeps reading the raw stored endpoints, so a
+//!   printed interval still round-trips; the numeric functions and the stored
+//!   endpoints part ways only on the sign of a zero.
 //! - `wid` is `sup - inf` rounded outward. On the `f64` fixture directed
 //!   subtraction is `(sup - sup).next_up()`, one ulp wide even when the exact
 //!   difference is representable, so a finite width is asserted as a SOUND upper
 //!   bound (`wid >= tightest`), never pinned; the empty (`None`) and unbounded
 //!   (`+inf`) widths are exact.
 //! - the orderings, `overlap`, `subset`, `interior`, `disjoint`, `isEmpty`,
-//!   `isEntire`, `isNaI`, `isSingleton`, `intersection`, and `convexHull` are
-//!   exact set/endpoint logic: pinned exactly, empty tables included.
+//!   `isEntire`, `isNaI`, `isSingleton`, `isCommonInterval`, `isMember`,
+//!   `intersection`, and `convexHull` are exact set/endpoint logic: pinned
+//!   exactly, empty tables included, bare and decorated.
 //! - `mid`/`rad`/`midRad` are transcribed 1:1 with exact assertions. The
 //!   structural, singleton, symmetric, and half-unbounded vectors pass on this
 //!   fixture; the general bounded vectors cannot (directed halving lands the mid
@@ -43,18 +46,21 @@
 //!   tight backend. Soundness of the loose values is covered by the curated fns
 //!   and the property lanes.
 //!
-//! # Required-operation gaps (see the `KNOWN GAP` block below)
+//! # Decorated and recommended surface
 //!
-//! Several corpus testcases exercise operations the crate does not surface. Their
-//! bare siblings are covered; the decorated or recommended forms are reported,
-//! not faked. The crate deliberately factors decoration handling: the boolean and
-//! relational operations have decorated forms (transcribed 1:1 above), and
-//! `isNaI_dec` is transcribed 1:1 against `is_nai()`, but the numeric accessors,
-//! the remaining unary predicates, and the set operations have no decorated
-//! forms, so those `_dec` testcases (and the recommended `isCommonInterval` /
-//! `isMember`, whose bare intents are covered by documented compositions over
-//! `is_bounded` / `contains`) are recorded as gaps with their corpus counts, not
-//! transcribed.
+//! The decorated numeric accessors (`inf`/`sup`/`wid`/`mag`/`mig`/`mid`/`rad`/
+//! `midRad`), the decorated unary predicates (`isEmpty`/`isEntire`/`isSingleton`/
+//! `isCommonInterval`/`isMember`), and the decorated set operations
+//! (`intersection`/`convexHull`) are transcribed 1:1 in the decorated section
+//! below, beside the now-surfaced bare `isCommonInterval` and `isMember`. The
+//! decorated numeric accessors return the Level 2 float datum, so a `NaN` datum
+//! asserts `is_nan()`: NaN for a `NaI` (and, for the accessors whose bare form is
+//! `None` on the empty set, for an empty interval part). The decorated predicates
+//! and set operations add only the `NaI` rule over the bare behavior (a predicate
+//! is `false` on a `NaI`; a set operation propagates the `NaI`). `mid`/`rad`/
+//! `midRad` decorated split into a live fn and an `#[ignore]`d loose twin exactly
+//! as their bare siblings do, since the decorated accessor reads the same loose
+//! fixture midpoint.
 //!
 //! The property lanes add: (a) the defining `mid`/`rad` enclosure property over
 //! random bounded intervals; (b) `mid` inside the interval and `rad` nonnegative;
@@ -137,6 +143,31 @@ fn hx(s: &str) -> f64 {
     } else {
         val
     }
+}
+
+/// Whether `x` is negative zero, bit-exactly. The Level 2 `inf` datum for a zero
+/// infimum is `-0`, so the zero-infimum vectors assert this rather than `== 0.0`
+/// (which is blind to the sign).
+fn is_neg_zero(x: f64) -> bool {
+    x == 0.0 && x.is_sign_negative()
+}
+
+/// Whether `x` is positive zero, bit-exactly. The mirror of [`is_neg_zero`], for
+/// the Level 2 `sup` datum of a zero supremum.
+fn is_pos_zero(x: f64) -> bool {
+    x == 0.0 && !x.is_sign_negative()
+}
+
+/// A decorated `wid` that is a one-ulp-sound over-estimate of the corpus width,
+/// the decorated mirror of [`wid_one_ulp_sound`]: the finite decorated widths are
+/// the same `(sup - inf).next_up()` the bare `wid` gives, sound but a hair loose on
+/// this fixture.
+fn wid_dec_one_ulp_sound(d: DecoratedInterval<f64>, tightest: f64) {
+    let w = d.wid();
+    assert!(
+        tightest <= w && w <= tightest.next_up(),
+        "decorated wid {w} is not a one-ulp-sound over-estimate of the corpus width {tightest}"
+    );
 }
 
 // --- Numeric: mid / rad / mid_rad -----------------------------------------
@@ -817,10 +848,10 @@ fn decorated_overlap_reads_interval_part() {
 #[test]
 fn inf_bare_vectors() {
     // minimal_inf_test: 14 vectors. `inf` reads an endpoint and never rounds, so
-    // it is pinned exactly. The corpus writes `-0.0` for the lower endpoint of
-    // several intervals; the assertion is at the Level 2 value, where
-    // `-0.0 == +0.0`, so the endpoint's sign of zero is not separately pinned
-    // (the fixture returns `+0.0` for `inf([0, +inf])`, a harmless difference).
+    // it is pinned exactly. Where the corpus writes `-0.0` for the infimum, the
+    // Level 2 datum is negative zero regardless of the stored endpoint's sign; the
+    // six zero-infimum vectors assert this bit-exactly through `is_neg_zero`, not
+    // through `== 0.0` (which is blind to the sign).
     assert_eq!(Interval::<f64>::empty().inf(), INF);
     assert_eq!(Interval::<f64>::entire().inf(), NEG_INF);
     assert_eq!(iv(1.0, 2.0).inf(), 1.0);
@@ -829,31 +860,33 @@ fn inf_bare_vectors() {
     assert_eq!(iv(NEG_INF, 0.0).inf(), NEG_INF);
     assert_eq!(iv(NEG_INF, -0.0).inf(), NEG_INF);
     assert_eq!(iv(-2.0, INF).inf(), -2.0);
-    assert_eq!(iv(0.0, INF).inf(), -0.0);
-    assert_eq!(iv(-0.0, INF).inf(), -0.0);
-    assert_eq!(iv(-0.0, 0.0).inf(), -0.0);
-    assert_eq!(iv(0.0, -0.0).inf(), -0.0);
-    assert_eq!(iv(0.0, 0.0).inf(), -0.0);
-    assert_eq!(iv(-0.0, -0.0).inf(), -0.0);
+    assert!(is_neg_zero(iv(0.0, INF).inf()));
+    assert!(is_neg_zero(iv(-0.0, INF).inf()));
+    assert!(is_neg_zero(iv(-0.0, 0.0).inf()));
+    assert!(is_neg_zero(iv(0.0, -0.0).inf()));
+    assert!(is_neg_zero(iv(0.0, 0.0).inf()));
+    assert!(is_neg_zero(iv(-0.0, -0.0).inf()));
 }
 
 #[test]
 fn sup_bare_vectors() {
-    // minimal_sup_test: 14 vectors. Exact, same signed-zero caveat as `inf`.
+    // minimal_sup_test: 14 vectors. Exact. The mirror of `inf`: where the corpus
+    // writes `0.0` for the supremum, the Level 2 datum is positive zero, and the
+    // six zero-supremum vectors assert this bit-exactly through `is_pos_zero`.
     assert_eq!(Interval::<f64>::empty().sup(), NEG_INF);
     assert_eq!(Interval::<f64>::entire().sup(), INF);
     assert_eq!(iv(1.0, 2.0).sup(), 2.0);
     assert_eq!(iv(-3.0, -2.0).sup(), -2.0);
     assert_eq!(iv(NEG_INF, 2.0).sup(), 2.0);
-    assert_eq!(iv(NEG_INF, 0.0).sup(), 0.0);
-    assert_eq!(iv(NEG_INF, -0.0).sup(), 0.0);
+    assert!(is_pos_zero(iv(NEG_INF, 0.0).sup()));
+    assert!(is_pos_zero(iv(NEG_INF, -0.0).sup()));
     assert_eq!(iv(-2.0, INF).sup(), INF);
     assert_eq!(iv(0.0, INF).sup(), INF);
     assert_eq!(iv(-0.0, INF).sup(), INF);
-    assert_eq!(iv(-0.0, 0.0).sup(), 0.0);
-    assert_eq!(iv(0.0, -0.0).sup(), 0.0);
-    assert_eq!(iv(0.0, 0.0).sup(), 0.0);
-    assert_eq!(iv(-0.0, -0.0).sup(), 0.0);
+    assert!(is_pos_zero(iv(-0.0, 0.0).sup()));
+    assert!(is_pos_zero(iv(0.0, -0.0).sup()));
+    assert!(is_pos_zero(iv(0.0, 0.0).sup()));
+    assert!(is_pos_zero(iv(-0.0, -0.0).sup()));
 }
 
 // --- Numeric: wid (sound-not-tight for finite widths on this fixture) ------
@@ -1332,77 +1365,71 @@ fn is_singleton_bare_vectors() {
 }
 
 #[test]
-fn is_common_interval_via_bounded_nonempty() {
-    // minimal_is_common_interval_test: 12 vectors.
-    // The crate surfaces no `is_common_interval`; the standard's predicate is
-    // "nonempty and bounded", checked here through the named `is_empty`/
-    // `is_bounded` (a documented surface gap; see the KNOWN GAP block). This
-    // exercises `is_bounded`'s boundary behavior at entire / half-unbounded /
-    // realmax, which the named predicate would delegate to.
-    let common = |x: Interval<f64>| !x.is_empty() && x.is_bounded();
-    assert!(common(iv(-27.0, -27.0)));
-    assert!(common(iv(-27.0, 0.0)));
-    assert!(common(iv(0.0, 0.0)));
-    assert!(common(iv(-0.0, -0.0)));
-    assert!(common(iv(-0.0, 0.0)));
-    assert!(common(iv(0.0, -0.0)));
-    assert!(common(iv(5.0, 12.4)));
-    assert!(common(iv(-MAX, MAX))); // [-0x1.F..Fp1023, 0x1.F..Fp1023]
+fn is_common_interval_bare_vectors() {
+    // minimal_is_common_interval_test: 12 vectors (8 true, 4 false). A common
+    // interval is nonempty and bounded, asserted against the named
+    // `Interval::is_common_interval`.
+    assert!(iv(-27.0, -27.0).is_common_interval());
+    assert!(iv(-27.0, 0.0).is_common_interval());
+    assert!(iv(0.0, 0.0).is_common_interval());
+    assert!(iv(-0.0, -0.0).is_common_interval());
+    assert!(iv(-0.0, 0.0).is_common_interval());
+    assert!(iv(0.0, -0.0).is_common_interval());
+    assert!(iv(5.0, 12.4).is_common_interval());
+    assert!(iv(-MAX, MAX).is_common_interval()); // [-0x1.F..Fp1023, 0x1.F..Fp1023]
 
-    assert!(!common(Interval::<f64>::entire()));
-    assert!(!common(Interval::<f64>::empty()));
-    assert!(!common(iv(NEG_INF, 0.0)));
-    assert!(!common(iv(0.0, INF)));
+    assert!(!Interval::<f64>::entire().is_common_interval());
+    assert!(!Interval::<f64>::empty().is_common_interval());
+    assert!(!iv(NEG_INF, 0.0).is_common_interval());
+    assert!(!iv(0.0, INF).is_common_interval());
 }
 
 #[test]
-fn is_member_via_finite_contains() {
-    // minimal_is_member_test: 35 vectors.
-    // The crate surfaces no `is_member`; the standard's predicate is "m is a
-    // finite real number lying in x". `Interval::contains` alone diverges here,
-    // since it admits an infinite argument at an infinite endpoint
-    // (`entire.contains(+inf) == true`), so the standard's finiteness guard is
-    // applied explicitly (a documented surface gap; see the KNOWN GAP block).
-    let member = |m: f64, x: Interval<f64>| m.is_finite() && x.contains(m);
+fn is_member_bare_vectors() {
+    // minimal_is_member_test: 35 vectors (20 true, 15 false). `m` is a member of
+    // `x` when it is a finite real lying in `x`, asserted against the named
+    // `Interval::is_member`. The finiteness guard is load bearing: an infinity is
+    // not a member even at a matching infinite endpoint
+    // (`entire.contains(+inf)` is true; `entire.is_member(+inf)` is false).
     let max = hx("0x1.FFFFFFFFFFFFFp1023");
     let min_normal = hx("0x1.0p-1022");
 
-    assert!(member(-27.0, iv(-27.0, -27.0)));
-    assert!(member(-27.0, iv(-27.0, 0.0)));
-    assert!(member(-7.0, iv(-27.0, 0.0)));
-    assert!(member(0.0, iv(-27.0, 0.0)));
-    assert!(member(-0.0, iv(0.0, 0.0)));
-    assert!(member(0.0, iv(0.0, 0.0)));
-    assert!(member(0.0, iv(-0.0, -0.0)));
-    assert!(member(0.0, iv(-0.0, 0.0)));
-    assert!(member(0.0, iv(0.0, -0.0)));
-    assert!(member(5.0, iv(5.0, 12.4)));
-    assert!(member(6.3, iv(5.0, 12.4)));
-    assert!(member(12.4, iv(5.0, 12.4)));
-    assert!(member(0.0, Interval::entire()));
-    assert!(member(5.0, Interval::entire()));
-    assert!(member(6.3, Interval::entire()));
-    assert!(member(12.4, Interval::entire()));
-    assert!(member(max, Interval::entire()));
-    assert!(member(-max, Interval::entire()));
-    assert!(member(min_normal, Interval::entire()));
-    assert!(member(-min_normal, Interval::entire()));
+    assert!(iv(-27.0, -27.0).is_member(-27.0));
+    assert!(iv(-27.0, 0.0).is_member(-27.0));
+    assert!(iv(-27.0, 0.0).is_member(-7.0));
+    assert!(iv(-27.0, 0.0).is_member(0.0));
+    assert!(iv(0.0, 0.0).is_member(-0.0));
+    assert!(iv(0.0, 0.0).is_member(0.0));
+    assert!(iv(-0.0, -0.0).is_member(0.0));
+    assert!(iv(-0.0, 0.0).is_member(0.0));
+    assert!(iv(0.0, -0.0).is_member(0.0));
+    assert!(iv(5.0, 12.4).is_member(5.0));
+    assert!(iv(5.0, 12.4).is_member(6.3));
+    assert!(iv(5.0, 12.4).is_member(12.4));
+    assert!(Interval::<f64>::entire().is_member(0.0));
+    assert!(Interval::<f64>::entire().is_member(5.0));
+    assert!(Interval::<f64>::entire().is_member(6.3));
+    assert!(Interval::<f64>::entire().is_member(12.4));
+    assert!(Interval::<f64>::entire().is_member(max));
+    assert!(Interval::<f64>::entire().is_member(-max));
+    assert!(Interval::<f64>::entire().is_member(min_normal));
+    assert!(Interval::<f64>::entire().is_member(-min_normal));
 
-    assert!(!member(-71.0, iv(-27.0, 0.0)));
-    assert!(!member(0.1, iv(-27.0, 0.0)));
-    assert!(!member(-0.01, iv(0.0, 0.0)));
-    assert!(!member(0.000_001, iv(0.0, 0.0)));
-    assert!(!member(111_110.0, iv(-0.0, -0.0)));
-    assert!(!member(4.9, iv(5.0, 12.4)));
-    assert!(!member(-6.3, iv(5.0, 12.4)));
-    assert!(!member(0.0, Interval::empty()));
-    assert!(!member(-4535.3, Interval::empty()));
-    assert!(!member(NEG_INF, Interval::empty()));
-    assert!(!member(INF, Interval::empty()));
-    assert!(!member(f64::NAN, Interval::empty()));
-    assert!(!member(NEG_INF, Interval::entire())); // contains == true; is_member == false
-    assert!(!member(INF, Interval::entire())); // contains == true; is_member == false
-    assert!(!member(f64::NAN, Interval::entire()));
+    assert!(!iv(-27.0, 0.0).is_member(-71.0));
+    assert!(!iv(-27.0, 0.0).is_member(0.1));
+    assert!(!iv(0.0, 0.0).is_member(-0.01));
+    assert!(!iv(0.0, 0.0).is_member(0.000_001));
+    assert!(!iv(-0.0, -0.0).is_member(111_110.0));
+    assert!(!iv(5.0, 12.4).is_member(4.9));
+    assert!(!iv(5.0, 12.4).is_member(-6.3));
+    assert!(!Interval::<f64>::empty().is_member(0.0));
+    assert!(!Interval::<f64>::empty().is_member(-4535.3));
+    assert!(!Interval::<f64>::empty().is_member(NEG_INF));
+    assert!(!Interval::<f64>::empty().is_member(INF));
+    assert!(!Interval::<f64>::empty().is_member(f64::NAN));
+    assert!(!Interval::<f64>::entire().is_member(NEG_INF)); // contains true; is_member false
+    assert!(!Interval::<f64>::entire().is_member(INF)); // contains true; is_member false
+    assert!(!Interval::<f64>::entire().is_member(f64::NAN));
 }
 
 // --- Set operations: intersection / convexHull (bare) ---------------------
@@ -1432,52 +1459,513 @@ fn convex_hull_bare_vectors() {
 }
 
 // ===========================================================================
-// REQUIRED-OPERATION GAPS (surface the crate does not expose)
+// DECORATED AND RECOMMENDED SURFACE (the corpus transcriptions)
 // ===========================================================================
 //
-// The following corpus testcases exercise operations the crate does not surface.
-// Their bare siblings above are covered in full; the decorated / recommended
-// forms are reported here rather than faked (do not invent API). Each entry names
-// the missing operation, the blocked testcase, and its corpus vector count. The
-// crate deliberately factors decoration handling: the boolean and relational
-// operations carry decorated forms (see the `_dec` tests above), but the numeric
-// accessors, the unary predicates, and the set operations do not.
+// The decorated numeric accessors, decorated unary predicates, decorated set
+// operations, and the recommended isCommonInterval / isMember (bare above,
+// decorated here). Each testcase is one fn headed by a per-testcase count comment.
+// The decorations on a vector are ignored by the numeric accessors and the
+// predicates (only the interval part and NaI-ness decide); the set operations
+// decorate every non-NaI result `trv`.
+
+// --- Decorated unary predicates: isEmpty / isEntire / isSingleton ---------
+
+#[test]
+fn is_empty_dec_vectors() {
+    // minimal_is_empty_dec_test: 15 vectors. A NaI is not empty (isEmpty [nai] =
+    // false); otherwise the interval part decides.
+    assert!(!nai().is_empty());
+    assert!(di_empty(Decoration::Trv).is_empty());
+    assert!(!di(NEG_INF, INF, Decoration::Def).is_empty());
+    assert!(!di(1.0, 2.0, Decoration::Com).is_empty());
+    assert!(!di(-1.0, 2.0, Decoration::Trv).is_empty());
+    assert!(!di(-3.0, -2.0, Decoration::Dac).is_empty());
+    assert!(!di(NEG_INF, 2.0, Decoration::Trv).is_empty());
+    assert!(!di(NEG_INF, 0.0, Decoration::Trv).is_empty());
+    assert!(!di(NEG_INF, -0.0, Decoration::Trv).is_empty());
+    assert!(!di(0.0, INF, Decoration::Def).is_empty());
+    assert!(!di(-0.0, INF, Decoration::Trv).is_empty());
+    assert!(!di(-0.0, 0.0, Decoration::Com).is_empty());
+    assert!(!di(0.0, -0.0, Decoration::Trv).is_empty());
+    assert!(!di(0.0, 0.0, Decoration::Trv).is_empty());
+    assert!(!di(-0.0, -0.0, Decoration::Trv).is_empty());
+}
+
+#[test]
+fn is_entire_dec_vectors() {
+    // minimal_is_entire_dec_test: 17 vectors. False for a NaI; otherwise the
+    // interval part decides (entire under any nonempty decoration is entire).
+    assert!(!nai().is_entire());
+    assert!(!di_empty(Decoration::Trv).is_entire());
+    assert!(di(NEG_INF, INF, Decoration::Trv).is_entire());
+    assert!(di(NEG_INF, INF, Decoration::Def).is_entire());
+    assert!(di(NEG_INF, INF, Decoration::Dac).is_entire());
+    assert!(!di(1.0, 2.0, Decoration::Com).is_entire());
+    assert!(!di(-1.0, 2.0, Decoration::Trv).is_entire());
+    assert!(!di(-3.0, -2.0, Decoration::Dac).is_entire());
+    assert!(!di(NEG_INF, 2.0, Decoration::Trv).is_entire());
+    assert!(!di(NEG_INF, 0.0, Decoration::Trv).is_entire());
+    assert!(!di(NEG_INF, -0.0, Decoration::Trv).is_entire());
+    assert!(!di(0.0, INF, Decoration::Def).is_entire());
+    assert!(!di(-0.0, INF, Decoration::Trv).is_entire());
+    assert!(!di(-0.0, 0.0, Decoration::Com).is_entire());
+    assert!(!di(0.0, -0.0, Decoration::Trv).is_entire());
+    assert!(!di(0.0, 0.0, Decoration::Trv).is_entire());
+    assert!(!di(-0.0, -0.0, Decoration::Trv).is_entire());
+}
+
+#[test]
+fn is_singleton_dec_vectors() {
+    // minimal_is_singleton_dec_test: 16 vectors (8 true, 8 false). False for a
+    // NaI; otherwise the interval part decides.
+    assert!(di(-27.0, -27.0, Decoration::Def).is_singleton());
+    assert!(di(-2.0, -2.0, Decoration::Trv).is_singleton());
+    assert!(di(12.0, 12.0, Decoration::Dac).is_singleton());
+    assert!(di(17.1, 17.1, Decoration::Com).is_singleton());
+    assert!(di(-0.0, -0.0, Decoration::Def).is_singleton());
+    assert!(di(0.0, 0.0, Decoration::Com).is_singleton());
+    assert!(di(-0.0, 0.0, Decoration::Def).is_singleton());
+    assert!(di(0.0, -0.0, Decoration::Dac).is_singleton());
+
+    assert!(!di_empty(Decoration::Trv).is_singleton());
+    assert!(!nai().is_singleton());
+    assert!(!di(NEG_INF, INF, Decoration::Def).is_singleton());
+    assert!(!di(-1.0, 0.0, Decoration::Dac).is_singleton());
+    assert!(!di(-1.0, -0.5, Decoration::Com).is_singleton());
+    assert!(!di(1.0, 2.0, Decoration::Def).is_singleton());
+    assert!(!di(NEG_INF, -MAX, Decoration::Dac).is_singleton()); // [-inf,-0x1.F..Fp1023]
+    assert!(!di(-1.0, INF, Decoration::Trv).is_singleton());
+}
+
+// --- Decorated numeric accessors: inf / sup / wid / mag / mig --------------
+
+#[test]
+fn inf_dec_vectors() {
+    // minimal_inf_dec_test: 15 vectors. A NaI reads NaN; otherwise the bare inf of
+    // the interval part, signed-zero rule included. The decoration is ignored.
+    assert!(nai().inf().is_nan());
+    assert_eq!(di_empty(Decoration::Trv).inf(), INF);
+    assert_eq!(di(NEG_INF, INF, Decoration::Def).inf(), NEG_INF);
+    assert_eq!(di(1.0, 2.0, Decoration::Com).inf(), 1.0);
+    assert_eq!(di(-3.0, -2.0, Decoration::Trv).inf(), -3.0);
+    assert_eq!(di(NEG_INF, 2.0, Decoration::Dac).inf(), NEG_INF);
+    assert_eq!(di(NEG_INF, 0.0, Decoration::Def).inf(), NEG_INF);
+    assert_eq!(di(NEG_INF, -0.0, Decoration::Trv).inf(), NEG_INF);
+    assert_eq!(di(-2.0, INF, Decoration::Trv).inf(), -2.0);
+    assert!(is_neg_zero(di(0.0, INF, Decoration::Def).inf()));
+    assert!(is_neg_zero(di(-0.0, INF, Decoration::Trv).inf()));
+    assert!(is_neg_zero(di(-0.0, 0.0, Decoration::Dac).inf()));
+    assert!(is_neg_zero(di(0.0, -0.0, Decoration::Trv).inf()));
+    assert!(is_neg_zero(di(0.0, 0.0, Decoration::Trv).inf()));
+    assert!(is_neg_zero(di(-0.0, -0.0, Decoration::Trv).inf()));
+}
+
+#[test]
+fn sup_dec_vectors() {
+    // minimal_sup_dec_test: 15 vectors. A NaI reads NaN; otherwise the bare sup of
+    // the interval part, signed-zero rule included.
+    assert!(nai().sup().is_nan());
+    assert_eq!(di_empty(Decoration::Trv).sup(), NEG_INF);
+    assert_eq!(di(NEG_INF, INF, Decoration::Def).sup(), INF);
+    assert_eq!(di(1.0, 2.0, Decoration::Com).sup(), 2.0);
+    assert_eq!(di(-3.0, -2.0, Decoration::Trv).sup(), -2.0);
+    assert_eq!(di(NEG_INF, 2.0, Decoration::Dac).sup(), 2.0);
+    assert!(is_pos_zero(di(NEG_INF, 0.0, Decoration::Def).sup()));
+    assert!(is_pos_zero(di(NEG_INF, -0.0, Decoration::Trv).sup()));
+    assert_eq!(di(-2.0, INF, Decoration::Trv).sup(), INF);
+    assert_eq!(di(0.0, INF, Decoration::Def).sup(), INF);
+    assert_eq!(di(-0.0, INF, Decoration::Trv).sup(), INF);
+    assert!(is_pos_zero(di(-0.0, 0.0, Decoration::Dac).sup()));
+    assert!(is_pos_zero(di(0.0, -0.0, Decoration::Trv).sup()));
+    assert!(is_pos_zero(di(0.0, 0.0, Decoration::Trv).sup()));
+    assert!(is_pos_zero(di(-0.0, -0.0, Decoration::Trv).sup()));
+}
+
+#[test]
+fn wid_dec_vectors() {
+    // minimal_wid_dec_test: 9 vectors. NaN for empty and NaI; the finite widths
+    // are one-ulp-sound over the corpus datum, the unbounded widths exact, exactly
+    // as the bare wid.
+    wid_dec_one_ulp_sound(di(2.0, 2.0, Decoration::Com), 0.0);
+    wid_dec_one_ulp_sound(di(1.0, 2.0, Decoration::Trv), 1.0);
+    assert_eq!(di(1.0, INF, Decoration::Trv).wid(), INF);
+    assert_eq!(di(NEG_INF, 2.0, Decoration::Def).wid(), INF);
+    assert_eq!(di(NEG_INF, INF, Decoration::Trv).wid(), INF);
+    assert!(di_empty(Decoration::Trv).wid().is_nan());
+    assert!(nai().wid().is_nan());
+    wid_dec_one_ulp_sound(
+        di(hx("0X1P+0"), hx("0X1.0000000000001P+0"), Decoration::Trv),
+        hx("0X1P-52"),
+    );
+    wid_dec_one_ulp_sound(
+        di(
+            hx("0X1P-1022"),
+            hx("0X1.0000000000001P-1022"),
+            Decoration::Trv,
+        ),
+        hx("0X0.0000000000001P-1022"),
+    );
+}
+
+#[test]
+fn mag_dec_vectors() {
+    // minimal_mag_dec_test: 9 vectors. NaN for empty and NaI; otherwise the bare
+    // mag, pinned exactly.
+    assert_eq!(di(1.0, 2.0, Decoration::Com).mag(), 2.0);
+    assert_eq!(di(-4.0, 2.0, Decoration::Trv).mag(), 4.0);
+    assert_eq!(di(NEG_INF, 2.0, Decoration::Trv).mag(), INF);
+    assert_eq!(di(1.0, INF, Decoration::Def).mag(), INF);
+    assert_eq!(di(NEG_INF, INF, Decoration::Trv).mag(), INF);
+    assert!(di_empty(Decoration::Trv).mag().is_nan());
+    assert!(nai().mag().is_nan());
+    assert_eq!(di(-0.0, 0.0, Decoration::Trv).mag(), 0.0);
+    assert_eq!(di(-0.0, -0.0, Decoration::Trv).mag(), 0.0);
+}
+
+#[test]
+fn mig_dec_vectors() {
+    // minimal_mig_dec_test: 12 vectors. NaN for empty and NaI; otherwise the bare
+    // mig, pinned exactly.
+    assert_eq!(di(1.0, 2.0, Decoration::Com).mig(), 1.0);
+    assert_eq!(di(-4.0, 2.0, Decoration::Trv).mig(), 0.0);
+    assert_eq!(di(-4.0, -2.0, Decoration::Trv).mig(), 2.0);
+    assert_eq!(di(NEG_INF, 2.0, Decoration::Def).mig(), 0.0);
+    assert_eq!(di(NEG_INF, -2.0, Decoration::Trv).mig(), 2.0);
+    assert_eq!(di(-1.0, INF, Decoration::Trv).mig(), 0.0);
+    assert_eq!(di(1.0, INF, Decoration::Trv).mig(), 1.0);
+    assert_eq!(di(NEG_INF, INF, Decoration::Trv).mig(), 0.0);
+    assert!(di_empty(Decoration::Trv).mig().is_nan());
+    assert!(nai().mig().is_nan());
+    assert_eq!(di(-0.0, 0.0, Decoration::Trv).mig(), 0.0);
+    assert_eq!(di(-0.0, -0.0, Decoration::Trv).mig(), 0.0);
+}
+
+// --- Decorated numeric accessors: mid / rad / midRad (1:1) -----------------
 //
-// libieeep1788_bool.itl -- no decorated unary predicate (only `is_nai` exists):
-//   minimal_is_empty_dec_test   (15 vectors) -- no DecoratedInterval::is_empty
-//   minimal_is_entire_dec_test  (17 vectors) -- no DecoratedInterval::is_entire
-//   Each reduces to `!d.is_nai() && d.interval().is_X()`. The NaI rule they add
-//   is already pinned by is_nai_dec_vectors plus the decorated relational twins,
-//   and the bare predicate behavior by is_empty_bare_vectors / is_entire_bare.
+// The decorated accessor reads the same fixture midpoint the bare accessor does,
+// so the fixture-loose general-bounded vectors split into an `#[ignore]`d twin
+// exactly as the bare mid/rad/midRad do. NaN for empty and NaI (asserted via
+// `is_nan`); the half-unbounded realmax datum and the exact-midpoint cases are
+// live. Never adjust expected values.
+
+#[test]
+fn mid_dec_vectors() {
+    // minimal_mid_dec_test: 8 of 13 vectors exact on this fixture (the 5 general-
+    // bounded vectors are in mid_dec_vectors_fixture_loose_known_gap; 8 + 5 = 13).
+    assert!(di_empty(Decoration::Trv).mid().is_nan());
+    assert!(nai().mid().is_nan());
+    assert_eq!(di(NEG_INF, INF, Decoration::Def).mid(), 0.0);
+    assert_eq!(di(-MAX, MAX, Decoration::Trv).mid(), 0.0); // [-0x1.F..Fp1023, +same]
+    assert_eq!(di(2.0, 2.0, Decoration::Dac).mid(), 2.0);
+    assert_eq!(di(-2.0, 2.0, Decoration::Trv).mid(), 0.0);
+    assert_eq!(
+        di(0.0, INF, Decoration::Trv).mid(),
+        hx("0x1.FFFFFFFFFFFFFp1023")
+    );
+    assert_eq!(
+        di(NEG_INF, 1.2, Decoration::Trv).mid(),
+        hx("-0x1.FFFFFFFFFFFFFp1023")
+    );
+}
+
+#[test]
+#[ignore = "KNOWN GAP: fixture looseness; general-bounded mid is ulps wide of the tight Level 2 datum"]
+fn mid_dec_vectors_fixture_loose_known_gap() {
+    // minimal_mid_dec_test: the 5 general-bounded vectors (of 13), the same set the
+    // bare mid_bare_vectors_fixture_loose_known_gap holds; the decorated accessor
+    // reads the identical loose fixture midpoint. Corpus datum held; green on a
+    // tight backend.
+    assert_eq!(di(0.0, 2.0, Decoration::Com).mid(), 1.0);
+    assert_eq!(
+        di(
+            hx("-0X0.0000000000002P-1022"),
+            hx("0X0.0000000000001P-1022"),
+            Decoration::Trv
+        )
+        .mid(),
+        0.0
+    );
+    assert_eq!(
+        di(
+            hx("-0X0.0000000000001P-1022"),
+            hx("0X0.0000000000002P-1022"),
+            Decoration::Trv
+        )
+        .mid(),
+        0.0
+    );
+    assert_eq!(
+        di(
+            hx("0X1.FFFFFFFFFFFFFP+1022"),
+            hx("0X1.FFFFFFFFFFFFFP+1023"),
+            Decoration::Trv
+        )
+        .mid(),
+        hx("0X1.7FFFFFFFFFFFFP+1023")
+    );
+    assert_eq!(
+        di(
+            hx("0X0.0000000000001P-1022"),
+            hx("0X0.0000000000003P-1022"),
+            Decoration::Trv
+        )
+        .mid(),
+        hx("0X0.0000000000002P-1022")
+    );
+}
+
+#[test]
+fn rad_dec_vectors() {
+    // minimal_rad_dec_test: 6 of 10 vectors exact on this fixture (the 4 finite-
+    // nonzero-radius vectors are in rad_dec_vectors_fixture_loose_known_gap;
+    // 6 + 4 = 10).
+    assert_eq!(di(2.0, 2.0, Decoration::Com).rad(), 0.0);
+    assert!(di_empty(Decoration::Trv).rad().is_nan());
+    assert!(nai().rad().is_nan());
+    assert_eq!(di(NEG_INF, INF, Decoration::Trv).rad(), INF);
+    assert_eq!(di(0.0, INF, Decoration::Def).rad(), INF);
+    assert_eq!(di(NEG_INF, 1.2, Decoration::Trv).rad(), INF);
+}
+
+#[test]
+#[ignore = "KNOWN GAP: fixture looseness; a finite nonzero rad is always an outward over-estimate"]
+fn rad_dec_vectors_fixture_loose_known_gap() {
+    // minimal_rad_dec_test: the 4 finite-nonzero-radius vectors (of 10), the same
+    // set as rad_bare_vectors_fixture_loose_known_gap. Corpus datum held; green on
+    // a tight backend.
+    assert_eq!(di(0.0, 2.0, Decoration::Trv).rad(), 1.0);
+    assert_eq!(
+        di(
+            hx("-0X0.0000000000002P-1022"),
+            hx("0X0.0000000000001P-1022"),
+            Decoration::Trv
+        )
+        .rad(),
+        hx("0X0.0000000000002P-1022")
+    );
+    assert_eq!(
+        di(
+            hx("0X0.0000000000001P-1022"),
+            hx("0X0.0000000000002P-1022"),
+            Decoration::Trv
+        )
+        .rad(),
+        hx("0X0.0000000000001P-1022")
+    );
+    assert_eq!(
+        di(hx("0X1P+0"), hx("0X1.0000000000003P+0"), Decoration::Trv).rad(),
+        hx("0X1P-51")
+    );
+}
+
+#[test]
+fn mid_rad_dec_vectors() {
+    // minimal_mid_rad_dec_test: 6 of 13 vectors exact on this fixture (the 7
+    // bounded non-singleton vectors are in
+    // mid_rad_dec_vectors_fixture_loose_known_gap; 6 + 7 = 13).
+    let (m, r) = di_empty(Decoration::Trv).mid_rad();
+    assert!(m.is_nan() && r.is_nan());
+    let (m, r) = nai().mid_rad();
+    assert!(m.is_nan() && r.is_nan());
+    assert_eq!(di(NEG_INF, INF, Decoration::Def).mid_rad(), (0.0, INF));
+    assert_eq!(di(2.0, 2.0, Decoration::Dac).mid_rad(), (2.0, 0.0));
+    assert_eq!(
+        di(0.0, INF, Decoration::Trv).mid_rad(),
+        (hx("0X1.FFFFFFFFFFFFFP+1023"), INF)
+    );
+    assert_eq!(
+        di(NEG_INF, 1.2, Decoration::Trv).mid_rad(),
+        (hx("-0X1.FFFFFFFFFFFFFP+1023"), INF)
+    );
+}
+
+#[test]
+#[ignore = "KNOWN GAP: fixture looseness; bounded mid/rad pairs are outward of the tight Level 2 data"]
+fn mid_rad_dec_vectors_fixture_loose_known_gap() {
+    // minimal_mid_rad_dec_test: the 7 bounded non-singleton vectors (of 13), the
+    // same set as mid_rad_bare_vectors_fixture_loose_known_gap (the realmax-
+    // symmetric pair fails on the radius alone). Corpus datum held; green on a
+    // tight backend.
+    assert_eq!(di(-MAX, MAX, Decoration::Trv).mid_rad(), (0.0, MAX));
+    assert_eq!(di(0.0, 2.0, Decoration::Com).mid_rad(), (1.0, 1.0));
+    assert_eq!(di(-2.0, 2.0, Decoration::Trv).mid_rad(), (0.0, 2.0));
+    assert_eq!(
+        di(
+            hx("-0X0.0000000000002P-1022"),
+            hx("0X0.0000000000001P-1022"),
+            Decoration::Trv
+        )
+        .mid_rad(),
+        (0.0, hx("0X0.0000000000002P-1022"))
+    );
+    assert_eq!(
+        di(
+            hx("-0X0.0000000000001P-1022"),
+            hx("0X0.0000000000002P-1022"),
+            Decoration::Trv
+        )
+        .mid_rad(),
+        (0.0, hx("0X0.0000000000002P-1022"))
+    );
+    assert_eq!(
+        di(
+            hx("0X1.FFFFFFFFFFFFFP+1022"),
+            hx("0X1.FFFFFFFFFFFFFP+1023"),
+            Decoration::Trv
+        )
+        .mid_rad(),
+        (hx("0X1.7FFFFFFFFFFFFP+1023"), hx("0x1.0p+1022"))
+    );
+    assert_eq!(
+        di(
+            hx("0X0.0000000000001P-1022"),
+            hx("0X0.0000000000003P-1022"),
+            Decoration::Trv
+        )
+        .mid_rad(),
+        (hx("0X0.0000000000002P-1022"), hx("0X0.0000000000001P-1022"))
+    );
+}
+
+// --- Recommended: isCommonInterval / isMember (decorated) -----------------
+
+#[test]
+fn is_common_interval_dec_vectors() {
+    // minimal_is_common_interval_dec_test: 21 vectors (8 com-true, 8 mixed-dec
+    // true, 5 false). False for a NaI; otherwise nonempty and bounded.
+    assert!(di(-27.0, -27.0, Decoration::Com).is_common_interval());
+    assert!(di(-27.0, 0.0, Decoration::Com).is_common_interval());
+    assert!(di(0.0, 0.0, Decoration::Com).is_common_interval());
+    assert!(di(-0.0, -0.0, Decoration::Com).is_common_interval());
+    assert!(di(-0.0, 0.0, Decoration::Com).is_common_interval());
+    assert!(di(0.0, -0.0, Decoration::Com).is_common_interval());
+    assert!(di(5.0, 12.4, Decoration::Com).is_common_interval());
+    assert!(di(-MAX, MAX, Decoration::Com).is_common_interval());
+
+    assert!(di(-27.0, -27.0, Decoration::Trv).is_common_interval());
+    assert!(di(-27.0, 0.0, Decoration::Def).is_common_interval());
+    assert!(di(0.0, 0.0, Decoration::Dac).is_common_interval());
+    assert!(di(-0.0, -0.0, Decoration::Trv).is_common_interval());
+    assert!(di(-0.0, 0.0, Decoration::Def).is_common_interval());
+    assert!(di(0.0, -0.0, Decoration::Dac).is_common_interval());
+    assert!(di(5.0, 12.4, Decoration::Def).is_common_interval());
+    assert!(di(-MAX, MAX, Decoration::Trv).is_common_interval());
+
+    assert!(!di(NEG_INF, INF, Decoration::Dac).is_common_interval());
+    assert!(!nai().is_common_interval());
+    assert!(!di_empty(Decoration::Trv).is_common_interval());
+    assert!(!di(NEG_INF, 0.0, Decoration::Trv).is_common_interval());
+    assert!(!di(0.0, INF, Decoration::Def).is_common_interval());
+}
+
+#[test]
+fn is_member_dec_vectors() {
+    // minimal_is_member_dec_test: 40 statements (20 true, 20 false). The corpus
+    // repeats two `isMember _ [empty]_trv = false` lines verbatim (the `0.0/[empty]`
+    // and `-4535.3/[empty]` vectors each appear twice), so the 40 statements cover
+    // 38 distinct vectors; both repeats are transcribed faithfully and marked
+    // below. A NaI operand makes membership false; otherwise the finite-real
+    // membership of the interval part decides. The decoration is ignored.
+    let max = hx("0x1.FFFFFFFFFFFFFp1023");
+    let min_normal = hx("0x1.0p-1022");
+
+    assert!(di(-27.0, -27.0, Decoration::Trv).is_member(-27.0));
+    assert!(di(-27.0, 0.0, Decoration::Def).is_member(-27.0));
+    assert!(di(-27.0, 0.0, Decoration::Dac).is_member(-7.0));
+    assert!(di(-27.0, 0.0, Decoration::Com).is_member(0.0));
+    assert!(di(0.0, 0.0, Decoration::Trv).is_member(-0.0));
+    assert!(di(0.0, 0.0, Decoration::Def).is_member(0.0));
+    assert!(di(-0.0, -0.0, Decoration::Dac).is_member(0.0));
+    assert!(di(-0.0, 0.0, Decoration::Com).is_member(0.0));
+    assert!(di(0.0, -0.0, Decoration::Trv).is_member(0.0));
+    assert!(di(5.0, 12.4, Decoration::Def).is_member(5.0));
+    assert!(di(5.0, 12.4, Decoration::Dac).is_member(6.3));
+    assert!(di(5.0, 12.4, Decoration::Com).is_member(12.4));
+    assert!(di(NEG_INF, INF, Decoration::Trv).is_member(0.0));
+    assert!(di(NEG_INF, INF, Decoration::Def).is_member(5.0));
+    assert!(di(NEG_INF, INF, Decoration::Dac).is_member(6.3));
+    assert!(di(NEG_INF, INF, Decoration::Trv).is_member(12.4));
+    assert!(di(NEG_INF, INF, Decoration::Def).is_member(max));
+    assert!(di(NEG_INF, INF, Decoration::Dac).is_member(-max));
+    assert!(di(NEG_INF, INF, Decoration::Trv).is_member(min_normal));
+    assert!(di(NEG_INF, INF, Decoration::Def).is_member(-min_normal));
+
+    assert!(!di(-27.0, 0.0, Decoration::Trv).is_member(-71.0));
+    assert!(!di(-27.0, 0.0, Decoration::Def).is_member(0.1));
+    assert!(!di(0.0, 0.0, Decoration::Dac).is_member(-0.01));
+    assert!(!di(0.0, 0.0, Decoration::Com).is_member(0.000_001));
+    assert!(!di(-0.0, -0.0, Decoration::Trv).is_member(111_110.0));
+    assert!(!di(5.0, 12.4, Decoration::Def).is_member(4.9));
+    assert!(!di(5.0, 12.4, Decoration::Dac).is_member(-6.3));
+    assert!(!di_empty(Decoration::Trv).is_member(0.0));
+    assert!(!di_empty(Decoration::Trv).is_member(0.0)); // corpus repeat of the line above
+    assert!(!di_empty(Decoration::Trv).is_member(-4535.3));
+    assert!(!di_empty(Decoration::Trv).is_member(-4535.3)); // corpus repeat of the line above
+    assert!(!di_empty(Decoration::Trv).is_member(NEG_INF));
+    assert!(!nai().is_member(NEG_INF));
+    assert!(!di_empty(Decoration::Trv).is_member(INF));
+    assert!(!nai().is_member(INF));
+    assert!(!di_empty(Decoration::Trv).is_member(f64::NAN));
+    assert!(!nai().is_member(f64::NAN));
+    assert!(!di(NEG_INF, INF, Decoration::Trv).is_member(NEG_INF));
+    assert!(!di(NEG_INF, INF, Decoration::Def).is_member(INF));
+    assert!(!di(NEG_INF, INF, Decoration::Dac).is_member(f64::NAN));
+}
+
+// --- Decorated set operations: intersection / convexHull -------------------
 //
-// libieeep1788_num.itl -- no decorated numeric accessor:
-//   minimal_inf_dec_test / minimal_sup_dec_test           (15 / 15 vectors)
-//   minimal_wid_dec_test / minimal_mag_dec_test / minimal_mig_dec_test
-//                                                          (9 / 9 / 12 vectors)
-//   minimal_mid_dec_test / minimal_rad_dec_test / minimal_mid_rad_dec_test
-//                                                          (13 / 10 / 13 vectors)
-//   For wid/mag/mig/mid/rad the standard's `X([nai]) = NaN` reads through
-//   `d.interval()` (a NaI's interval part is empty, whose numeric functions are
-//   `None`), so these are pure pass-through of the bare twins and add no
-//   coverage. For inf/sup the crate CANNOT reproduce the NaI datum through
-//   `interval()`: `nai().interval().inf()` is `+inf`, not `NaN`, so a decorated
-//   inf/sup accessor is genuinely absent, not just factored away.
-//
-// libieeep1788_rec_bool.itl -- no decorated / recommended operation:
-//   minimal_is_common_interval_dec_test (21 vectors) -- no is_common_interval
-//   minimal_is_singleton_dec_test       (16 vectors) -- no DecoratedInterval::is_singleton
-//   minimal_is_member_dec_test          (40 vectors; the corpus itself repeats
-//     two `isMember ... [empty]_trv = false` statements, and the true statement
-//     count is what is recorded) -- no is_member
-//   The bare intents are covered above (is_singleton exactly; is_common_interval
-//   and is_member via documented composition over is_bounded / contains).
-//
-// libieeep1788_set.itl -- no decorated set operation:
-//   minimal_intersection_dec_test (5 vectors) -- no DecoratedInterval::intersection
-//   minimal_convex_hull_dec_test  (5 vectors) -- no DecoratedInterval::convex_hull
-//   The corpus decorates every result `trv`, a decoration no crate operation
-//   produces; the bare set behavior is covered by intersection_bare_vectors /
-//   convex_hull_bare_vectors.
+// The non-arithmetic rule: a NaI propagates; otherwise the bare set operation is
+// taken and the result carries `trv`. Each vector checks both the interval part
+// and the `trv` decoration.
+
+#[test]
+fn intersection_dec_vectors() {
+    // minimal_intersection_dec_test: 5 vectors.
+    let r = di(1.0, 3.0, Decoration::Com).intersection(di(2.1, 4.0, Decoration::Com));
+    assert_eq!(r.interval(), iv(2.1, 3.0));
+    assert_eq!(r.decoration(), Decoration::Trv);
+
+    let r = di(1.0, 3.0, Decoration::Dac).intersection(di(3.0, 4.0, Decoration::Def));
+    assert_eq!(r.interval(), iv(3.0, 3.0));
+    assert_eq!(r.decoration(), Decoration::Trv);
+
+    let r = di(1.0, 3.0, Decoration::Def).intersection(di_empty(Decoration::Trv));
+    assert!(r.interval().is_empty());
+    assert_eq!(r.decoration(), Decoration::Trv);
+
+    let r = di(NEG_INF, INF, Decoration::Dac).intersection(di_empty(Decoration::Trv));
+    assert!(r.interval().is_empty());
+    assert_eq!(r.decoration(), Decoration::Trv);
+
+    let r = di(1.0, 3.0, Decoration::Dac).intersection(di(NEG_INF, INF, Decoration::Dac));
+    assert_eq!(r.interval(), iv(1.0, 3.0));
+    assert_eq!(r.decoration(), Decoration::Trv);
+}
+
+#[test]
+fn convex_hull_dec_vectors() {
+    // minimal_convex_hull_dec_test: 5 vectors.
+    let r = di(1.0, 3.0, Decoration::Trv).convex_hull(di(2.1, 4.0, Decoration::Trv));
+    assert_eq!(r.interval(), iv(1.0, 4.0));
+    assert_eq!(r.decoration(), Decoration::Trv);
+
+    let r = di(1.0, 1.0, Decoration::Trv).convex_hull(di(2.1, 4.0, Decoration::Trv));
+    assert_eq!(r.interval(), iv(1.0, 4.0));
+    assert_eq!(r.decoration(), Decoration::Trv);
+
+    let r = di(1.0, 3.0, Decoration::Trv).convex_hull(di_empty(Decoration::Trv));
+    assert_eq!(r.interval(), iv(1.0, 3.0));
+    assert_eq!(r.decoration(), Decoration::Trv);
+
+    let r = di_empty(Decoration::Trv).convex_hull(di_empty(Decoration::Trv));
+    assert!(r.interval().is_empty());
+    assert_eq!(r.decoration(), Decoration::Trv);
+
+    let r = di(1.0, 3.0, Decoration::Trv).convex_hull(di(NEG_INF, INF, Decoration::Dac));
+    assert!(r.interval().is_entire());
+    assert_eq!(r.decoration(), Decoration::Trv);
+}
 
 // --- Property lanes -------------------------------------------------------
 

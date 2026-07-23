@@ -24,13 +24,20 @@
 //! zero contributes exactly zero, regardless of the other factor's unbounded
 //! range. The corner helpers map that NaN to zero.
 //!
-//! # Division is multiplication by the reciprocal
+//! # Division rounds each quotient endpoint once
 //!
-//! `a / b` is `a * recip(b)`. This routes division through the four-corner
-//! multiplication (inheriting the `0 * inf` handling) and through
-//! [`Interval::recip`], which already encodes every zero case: a divisor that is
-//! exactly zero gives the empty set, a divisor straddling zero gives an unbounded
-//! result. No separate division-by-zero path is needed.
+//! `a / b` is not `a * recip(b)`: that route rounds twice, once forming the
+//! reciprocal and once forming the product, and loses a unit in the last place on
+//! an inexact quotient (`[-30, -15] / [-5, -3]` is exactly `[3, 10]`, but the
+//! reciprocal route widens it to `[2.999..., 10.000...]`). Instead each endpoint
+//! selects the one corner quotient `x / y` that attains the bound and rounds it
+//! once with the backend's directed division (Law 3), so a correctly-rounded
+//! backend yields the tightest enclosure. When `0` lies outside the divisor the
+//! quotient is monotone and the sign-cased core `odiv` picks the corners; the
+//! reverse-division path shares that core so the two cannot drift. When `0` lies
+//! inside the divisor the quotient set is a half-line, the whole line, a single
+//! point, or (for an exactly-zero divisor) empty; those endpoints are exact zeros
+//! and infinities, so no rounding arises and no reciprocal is needed.
 
 use core::ops::{Add, Div, Mul, Neg, Sub};
 
@@ -60,6 +67,39 @@ fn prod_up<F: RoundFloat>(x: F, y: F) -> F {
     }
 }
 
+/// Ordinary interval division `[a1, a2] / [b1, b2]` with `0` not in the divisor.
+///
+/// The quotient is monotone there (increasing in the numerator, decreasing in a
+/// positive divisor), so each endpoint is the one sign-selected corner rounded
+/// once. The selection never forms `inf / inf`: the lower endpoint pairs the
+/// numerator's low end with a divisor endpoint chosen by the numerator's sign,
+/// the upper endpoint the numerator's high end, and each pairing keeps one
+/// operand finite whenever the true bound is finite. A negative divisor reduces
+/// to a positive one by `[a] / [b] = -([a] / [-b])`.
+///
+/// Shared between the forward `Div` operator and the reverse-division path so the
+/// two quotients cannot drift.
+pub(crate) fn odiv<F: RoundFloat>(a1: F, a2: F, b1: F, b2: F) -> Interval<F> {
+    let zero = F::ZERO;
+    if b1 > zero {
+        // Divisor entirely positive.
+        let lo = if a1 >= zero {
+            a1.div_down(b2)
+        } else {
+            a1.div_down(b1)
+        };
+        let hi = if a2 >= zero {
+            a2.div_up(b1)
+        } else {
+            a2.div_up(b2)
+        };
+        Interval::hull(lo, hi)
+    } else {
+        // Divisor entirely negative: negate it to reach the positive case.
+        -odiv(a1, a2, b2.negate(), b1.negate())
+    }
+}
+
 impl<F: RoundFloat> Interval<F> {
     /// The four-corner product. Private so division can reuse it without writing
     /// a multiplication operator inside a `Div` impl.
@@ -76,6 +116,76 @@ impl<F: RoundFloat> Interval<F> {
             .rmax(prod_up(b, c))
             .rmax(prod_up(b, d));
         Self::hull(lo, hi)
+    }
+
+    /// The sign-cased quotient, one directed rounding per endpoint. Private so the
+    /// `Div` operator has a single derivation to call.
+    ///
+    /// The divisor's relation to zero drives the shape. `0` outside the divisor is
+    /// the monotone case handled by `odiv`. `0` inside splits by which side the
+    /// divisor touches zero and by the numerator's sign: the quotient set is then
+    /// a half-line to an infinity (finite end rounded once), the whole line, the
+    /// single point `[0, 0]` (an exactly-zero numerator), or empty (an
+    /// exactly-zero divisor). Those non-monotone endpoints are exact, so only the
+    /// half-line's finite end is ever rounded.
+    fn div_impl(self, rhs: Self) -> Self {
+        let (Some((a1, a2)), Some((b1, b2))) = (self.bounds(), rhs.bounds()) else {
+            return Self::empty();
+        };
+        let zero = F::ZERO;
+        // Divisor sign-stable, zero excluded: the monotone corner selection.
+        if zero < b1 || b2 < zero {
+            return odiv(a1, a2, b1, b2);
+        }
+        // From here `0` lies in the divisor.
+        // Divisor is exactly zero: no nonzero point to divide by.
+        if b1 == zero && b2 == zero {
+            return Self::empty();
+        }
+        // Numerator is exactly zero: `0 / y = 0` for every nonzero `y`.
+        if a1 == zero && a2 == zero {
+            return Self::hull(zero, zero);
+        }
+        // Divisor straddles zero: divisors of both signs approach zero, so the
+        // quotient runs to both infinities.
+        if b1 < zero && zero < b2 {
+            return Self::entire();
+        }
+        let inf = F::INFINITY;
+        let ninf = F::NEG_INFINITY;
+        if b1 == zero {
+            // Divisor is `[0, b2]`, `b2 > 0`: every nonzero divisor is positive.
+            if a2 < zero {
+                Self::hull(ninf, a2.div_up(b2))
+            } else if a1 > zero {
+                Self::hull(a1.div_down(b2), inf)
+            } else if a1 == zero {
+                // Numerator `[0, a2]`, `a2 > 0`.
+                Self::hull(zero, inf)
+            } else if a2 == zero {
+                // Numerator `[a1, 0]`, `a1 < 0`.
+                Self::hull(ninf, zero)
+            } else {
+                // Numerator straddles zero.
+                Self::entire()
+            }
+        } else {
+            // Divisor is `[b1, 0]`, `b1 < 0`: every nonzero divisor is negative.
+            if a2 < zero {
+                Self::hull(a2.div_down(b1), inf)
+            } else if a1 > zero {
+                Self::hull(ninf, a1.div_up(b1))
+            } else if a1 == zero {
+                // Numerator `[0, a2]`, `a2 > 0`.
+                Self::hull(ninf, zero)
+            } else if a2 == zero {
+                // Numerator `[a1, 0]`, `a1 < 0`.
+                Self::hull(zero, inf)
+            } else {
+                // Numerator straddles zero.
+                Self::entire()
+            }
+        }
     }
 
     /// Reciprocal, the set `{ 1 / y : y in self, y != 0 }`.
@@ -212,11 +322,11 @@ impl<F: RoundFloat> Mul for Interval<F> {
 impl<F: RoundFloat> Div for Interval<F> {
     type Output = Self;
 
-    /// Division, `self / rhs`, as `self * rhs.recip()`. Total: division by an
-    /// interval containing zero follows from [`recip`](Interval::recip) (empty
-    /// for an exact zero divisor, unbounded for a straddling one).
+    /// Division, `self / rhs`, rounding each quotient endpoint once. Total:
+    /// division by an interval containing zero yields a half-line, the whole line,
+    /// or (for an exactly-zero divisor) the empty set.
     fn div(self, rhs: Self) -> Self {
-        self.mul_impl(rhs.recip())
+        self.div_impl(rhs)
     }
 }
 

@@ -17,6 +17,8 @@ provenance-class: secondary
 consumers:
   - crates/interval-1788/README.md (the "C++ reference" named as behavioral oracle)
   - docs/decisions/0008-reduction-operations-kulisch-accumulator.md (the reduction mode-enum surface witness, surveyed 2026-07-16)
+  - crates/interval-1788/src/reverse.rs (oracle for the decorated `mul_rev_to_pair` first piece decoration doctrine, surveyed 2026-07-22)
+  - crates/interval-1788/src/reverse.rs (neg_root_bounds: the negative-exponent pownRev root-then-reciprocal fallback matches this reference's degraded rootn at the subnormal-overflow edge; enc-ral, 2026-07-22)
 verification:
   - none yet (oracle cross checks are manual; no automated lane)
 sha256: none
@@ -37,9 +39,34 @@ years, header only C++11 over MPFR/GMP/Boost.
 Weight claims by what the source could not have seen: a draft era
 implementation cannot witness final text changes, so on any disagreement
 between libieeep1788 and the published standard, the standard wins and the
-disagreement is worth recording here. Its test suite lives on inside the
+disagreement is worth recording here.
+
+A behavioral finding worth its own note (bead enc-ral, 2026-07-22): the
+`pownRev` vectors for a negative exponent whose constraint reaches a subnormal
+pin a value ONE ULP INSIDE the tightest representable root when that root is not
+a power of two. The set `{ t : t^-7 in [0, 2^-1074] }` has infimum `2^(1074/7)`,
+whose float floor is `bd = 0x1.588cea3f093bdp+153`, yet the corpus pins
+`bc = 0x1.588cea3f093bcp+153`. The reference computes the root by directed
+root-then-reciprocal, where its `rootn` degrades a rounding at the overflow edge
+(the ideal reciprocal `2^1074` is unrepresentable and `t^-7` underflows onto the
+coarse subnormal grid, so no float-by-float certification can resolve the
+tightest root there). Exponents whose root IS a power of two are exact (`2^358`
+for exponent three, `1074/3` integer). The crate reproduces this by holding the
+directed root-then-reciprocal seed at that edge rather than certifying, so the
+pair matches the corpus; where the constraint reciprocal is representable the
+crate certifies to the strictly tighter correctly-rounded pair. This is a place
+the reference is sound but not tightest, recorded because the crate deliberately
+matches it for conformance. Its test suite lives on inside the
 vendored ITF1788 corpus ([itf1788-framework](itf1788-framework.md)) as the
 libieeep1788_*.itl files. Paper page snapshot:
 web.archive.org/web/20250422085713/https://ieeexplore.ieee.org/document/6893854.
 Fresh Wayback saves were rate limited on 2026-06-11; recorded snapshots are pre
 existing.
+
+The library's decorated two output division implementation is a behavioral
+witness for the `mulRevToPair` first piece decoration (bead enc-pzd): it takes
+the meet of the two input decorations with trv when zero is in the divisor or
+the piece is empty, com when the piece is bounded nonempty, and dac otherwise,
+which is the normal division's grade the enclosure crate derives independently.
+Oracle only, never a template for code. Impl file snapshot taken 2026-07-22 at
+web.archive.org/web/20260722155731.

@@ -81,17 +81,22 @@ jobs:
       # affine-arith's discrete skeleton (symbol freshness, from_raw_parts, merge shape, condensation counts).
       - uses: model-checking/kani-github-action@v1
         with:
-          # from_raw_parts_accepts_exactly_faithful_input is NOT in this list:
-          # its formula (15 million SAT variables for a thirty-line function,
-          # dominated by bit-blasted Vec and allocator machinery, not by its
-          # symbolic inputs) sits at the standard runner's memory cliff and
-          # killed the wave-5b run by runner OOM mid-solve. It remains in the
-          # tree as a locally verified proof (discharges in about three
-          # minutes; observations recorded in the bead) and rejoins this list
-          # when the footprint is understood or the runner grows. Bead
-          # enc-ac4's successor tracks it; the harness module doc carries the
-          # same notice.
-          args: "-p affine-arith --features fixture --harness condense_bounds_terms_and_preserves_order --harness fresh_is_strictly_increasing --harness unscoped_at_resumption_is_fresh --harness fresh_at_exhaustion_panics"
+          # The from_raw_parts trio splits one proof into three, one property
+          # each. Two attest here: from_raw_parts_acceptance_is_exact and
+          # from_raw_parts_drops_zero_coefficients, each near 128 thousand SAT
+          # variables. The third, from_raw_parts_accepted_form_satisfies_invariant,
+          # is NOT in this list: it scans the returned terms, and scanning a heap
+          # Vec whose length and contents are both symbolic runs about 15 million
+          # SAT variables and peaks at 14 to 23 GiB, the standard runner's memory
+          # cliff that killed the wave-5b run by runner OOM mid-solve. An out of
+          # tree ladder placed the cost on that scan, not on the allocator or the
+          # Vec machinery (both near 15 thousand variables); the earlier note here
+          # blamed the container and was wrong. The invariant proof stays in the
+          # tree, verified locally (a minute or two), and rejoins this list when
+          # the runner grows or the model checker encodes a bounded but symbolic
+          # length slice more tightly. Bead enc-tgw tracks it; the harness module
+          # doc carries the same notice and the ladder numbers.
+          args: "-p affine-arith --features fixture --harness condense_bounds_terms_and_preserves_order --harness fresh_is_strictly_increasing --harness unscoped_at_resumption_is_fresh --harness fresh_at_exhaustion_panics --harness from_raw_parts_acceptance_is_exact --harness from_raw_parts_drops_zero_coefficients"
       # round-float's Kulisch accumulator carry, borrow, and shift-index logic.
       - uses: model-checking/kani-github-action@v1
         with:

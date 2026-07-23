@@ -71,6 +71,12 @@ pub use tight_f64::TightF64;
 #[cfg(feature = "f64-tight")]
 mod kulisch;
 
+// The exact integer-power kernel behind `RoundPown`, shared by both `f64`
+// backends. Compiled whenever a backend that delegates to it is present; the
+// trait itself is defined below unconditionally.
+#[cfg(any(feature = "f64", feature = "f64-tight"))]
+mod pown_kernel;
+
 /// A floating-point type that supports the outward-directed arithmetic rigorous
 /// enclosure methods are built on.
 ///
@@ -400,6 +406,44 @@ pub trait RoundPow: RoundFloat {
     /// An upper bound on the exact `n`-th root `self^(1/n)` (requires `n >= 1`; an
     /// even `n` requires `self >= 0`).
     fn rootn_up(self, n: u32) -> Self;
+}
+
+/// Outward-directed integer power `pown`, layered above [`RoundFloat`], riding
+/// an exact integer kernel.
+///
+/// `pown(x, n)` raises `x` to a fixed integer power `n` (IEEE 754-2019 clause
+/// 9.2), distinct from [`RoundPow`]'s real exponent. It rides its own trait
+/// because a correctly rounded integer power admits an exact bounded-memory
+/// implementation the real power does not: decompose the base into an integer
+/// significand and a power of two, raise the significand to `|n|` with exact
+/// integer arithmetic, and round once. The interval layer needs the tight
+/// integer power for its conformance lane, and a backend supplies it on its own
+/// schedule, exactly as it opts into [`RoundPow`] or [`RoundTranscendental`].
+/// See round-float decision record 0004 and workspace decision record 0005.
+///
+/// # The contract, and the exact range
+///
+/// Point semantics are IEEE 754-2019 `pown`: `pown(x, 0) == 1` for every `x`
+/// (including NaN and the infinities); a zero base with negative `n` follows the
+/// division semantics by parity. Under directed rounding the result is
+/// **correctly rounded (tightest)** for `1 <= |n| <= POWN_TIGHT_MAX` and a
+/// **sound directed bound** beyond. The bound is exact because the significand
+/// of `x^n` carries `53 * |n|` bits: no bounded-memory implementation is exact
+/// for unbounded `|n|` (a near-one base keeps astronomically large powers
+/// finite), and the table maker's dilemma bars an approximate shortcut from
+/// claiming correct rounding. [`POWN_TIGHT_MAX`](RoundPown::POWN_TIGHT_MAX) is a
+/// typed associated const so a caller can read where the tight guarantee ends;
+/// beyond it the implementation is a directed repeated-squaring chain, valid but
+/// not tightest. As with [`RoundFloat`], soundness is the obligation.
+pub trait RoundPown: RoundFloat {
+    /// The largest exponent magnitude for which the directed results are
+    /// correctly rounded (tightest). Beyond it the bounds stay sound.
+    const POWN_TIGHT_MAX: u32;
+
+    /// A lower bound on `self` raised to the integer power `n`.
+    fn pown_down(self, n: i32) -> Self;
+    /// An upper bound on `self` raised to the integer power `n`.
+    fn pown_up(self, n: i32) -> Self;
 }
 
 /// Outward-directed inverse trigonometric functions, layered above

@@ -204,7 +204,7 @@
 //!   named trust boundary, priced in round-float decision record 0002's
 //!   verification obligations.
 
-use crate::{RoundFloat, RoundLargestFinite};
+use crate::{RoundFloat, RoundLargestFinite, RoundPown};
 
 /// An `f64` carrying the correctly rounded directed-arithmetic instance of
 /// [`RoundFloat`].
@@ -571,4 +571,17 @@ impl RoundFloat for TightF64 {
 
 impl RoundLargestFinite for TightF64 {
     const LARGEST_FINITE: Self = TightF64(f64::MAX);
+}
+
+impl RoundPown for TightF64 {
+    const POWN_TIGHT_MAX: u32 = crate::pown_kernel::POWN_TIGHT_MAX;
+
+    #[inline]
+    fn pown_down(self, n: i32) -> Self {
+        TightF64(crate::pown_kernel::pown_down(self.0, n))
+    }
+    #[inline]
+    fn pown_up(self, n: i32) -> Self {
+        TightF64(crate::pown_kernel::pown_up(self.0, n))
+    }
 }

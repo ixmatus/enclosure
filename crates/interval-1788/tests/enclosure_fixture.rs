@@ -27,6 +27,13 @@ fn interval_and_point() -> impl Strategy<Value = (Interval<f64>, f64)> {
     })
 }
 
+/// Whether `inner` sits inside `outer`. An empty inner is a subset of anything;
+/// otherwise both endpoints must lie within the outer bounds.
+fn is_subset(inner: Interval<f64>, outer: Interval<f64>) -> bool {
+    inner.is_empty()
+        || (!outer.is_empty() && outer.inf() <= inner.inf() && inner.sup() <= outer.sup())
+}
+
 proptest! {
     // --- Phase A: construction invariant and observers ---
 
@@ -77,6 +84,26 @@ proptest! {
     #[test]
     fn sqr_encloses_pointwise((a, x) in interval_and_point()) {
         prop_assert!(a.sqr().contains(x * x));
+    }
+
+    #[test]
+    fn div_encloses_pointwise((a, x) in interval_and_point(), (b, y) in interval_and_point()) {
+        // Soundness (the fundamental theorem): a sampled quotient of points drawn
+        // from the operands lies in the interval quotient. The witness `y` is a
+        // point of `b`; skip the one divisor point that has no reciprocal.
+        prop_assume!(y != 0.0);
+        prop_assert!((a / b).contains(x / y));
+    }
+
+    #[test]
+    fn div_is_at_least_as_tight_as_recip_composition(
+        (a, _x) in interval_and_point(),
+        (b, _y) in interval_and_point(),
+    ) {
+        // Tightness cross-check: rounding each quotient endpoint once cannot be
+        // wider than the old `a * recip(b)` route, which rounds twice. The direct
+        // result is a subset of the composed one on every input.
+        prop_assert!(is_subset(a / b, a * b.recip()));
     }
 
     // --- Phase B: the singleton merge gate ---

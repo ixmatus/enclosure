@@ -19,9 +19,14 @@ consumers:
   - crates/round-float/tests/reduction_oracle.rs (the Kulisch accumulator's
     independent cross-check; carries both quirk workarounds)
   - crates/round-float/tests/reduction_conformance.rs
+  - crates/round-float/tests/pown_oracle.rs (the RoundPown kernel's exact
+    cross-check: correct rounding in the exact range, soundness past it; carries
+    the subnormal from_f64 workaround)
 verification:
   - crates/round-float/tests/reduction_oracle.rs (the lane this source grounds;
     its workaround comments cite this entry)
+  - crates/round-float/tests/pown_oracle.rs (the pown kernel's correct-rounding
+    and soundness lane; compares directed results to the exact integer power)
 sha256: none
 notes: >-
   The pure Rust arbitrary-precision oracle behind the reduction lanes, chosen

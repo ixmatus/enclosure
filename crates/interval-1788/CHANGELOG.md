@@ -8,14 +8,43 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Added
 
+- `DecoratedInterval::try_set_dec`, the strict constructor. It pairs an interval
+  with a decoration only when the pair is consistent, returning
+  `Option<DecoratedInterval<F>>` with `None` on an inconsistent pair rather than
+  clamping. It preserves the construction `set_dec` performed before this
+  change, now as an explicit signal in the type. Crate decision record 0007
+  (bead enc-2hd).
+
+- The decorated and recommended non-arithmetic surface (bead enc-ks9),
+  completing the conformance gaps the lane surfaced. On `DecoratedInterval<F>`:
+  the numeric accessors `inf`, `sup`, `wid`, `mag`, `mig` (bare `RoundFloat`)
+  and `mid`, `rad`, `mid_rad` (behind `RoundLargestFinite`); the unary
+  predicates `is_empty`, `is_entire`, `is_singleton`, `is_common_interval`,
+  `is_member`; and the set operations `intersection` and `convex_hull`. On
+  `Interval<F>`: the recommended `is_common_interval` (nonempty and bounded)
+  and `is_member` (a finite real lies in the interval, the finiteness guard
+  distinguishing it from `contains`, which admits an infinity at a matching
+  infinite endpoint). The decorated numeric accessors return the Level 2 float
+  datum (NaN for a `NaI`, and for the empty interval part of the accessors
+  whose bare form is `None` there) rather than an `Option`, since the corpus
+  pins a plain-float datum; the decorated predicates are `false` on a `NaI`,
+  and the decorated set operations propagate a `NaI` and otherwise grade the
+  bare result `trv` (the non-arithmetic rule the reverses follow). Test lane
+  `tests/numeric_boolean_fixture.rs` transcribes the ITF1788
+  `libieeep1788_num.itl`, `libieeep1788_bool.itl`, `libieeep1788_rec_bool.itl`,
+  and `libieeep1788_set.itl` decorated and recommended testcases 1:1 (262
+  statements); `mid`/`rad`/`midRad` decorated split into live fns and
+  `#[ignore]`d loose twins holding the tight datum, exactly as their bare
+  siblings.
+
 - The conformance document (`docs/conformance.md`, ledger item 13): the
   per-instantiation claim structure (the claim attaches to `TightF64`, never
   the generic crate), the operation and naming map, the lane's certified
-  totals (2,368 bit-exact vectors, zero soundness violations), the six open
-  items with their beads, the named divergences (values-not-signals, the
-  generic surface, the decorated `mulRevToPair` doctrine question), and the
-  evidence basis with its limits. A living document, dated, that becomes the
-  clause-12 claim at v1.0 and does not retire the README disclosures.
+  totals (2,368 bit-exact vectors, zero soundness violations), the open
+  items with their beads, the named divergences (values-not-signals and the
+  generic surface), and the evidence basis with its limits. A living document,
+  dated, that becomes the clause-12 claim at v1.0 and does not retire the
+  README disclosures.
 
 - The conformance vector lane (bead enc-ac4), split by backend. Over the
   correctly rounded `TightF64` (a dev-dependency; the shipped surface is
@@ -38,41 +67,31 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Known issues, surfaced by the lane and tracked as beads
 
-- Interval division is `a * recip(b)`, one rounding looser than the tightest
-  quotient on 56 vectors (enc-ghz); `pown`'s repeated squaring is loose for
-  exponent magnitude three and above, and its negative-power overflow path
-  collapses near the subnormal edge, 41 vectors (enc-5jj, falsifying the
-  workspace decision record 0007's assumption that the corpus could not
-  distinguish chain tightness). `pown_rev`'s root bisection leaves one-to-
-  three-ulp brackets for exponent magnitude three and above, 44 vectors
-  (enc-cov, an erratum owed to decision record 0006 part 3), and its
-  negative-exponent path saturates the set-level reciprocal at the subnormal
-  edge, 8 vectors (enc-ral). `set_dec` returns NaI where the standard's
-  `setDec` clamps, 6 vectors (enc-2hd). The draft-era corpus propagates
-  decorations through the two-output division where decision record 0006
-  part 5 grades `trv`, 175 decoration-only divergences pending a
-  final-standard reading (enc-pzd). The decorated conformance surface lacks
-  numeric accessors, unary predicates, set operations, and
-  `isCommonInterval`/`isMember` (enc-ks9). Every non-tight result above is a
-  verified sound enclosure; the lane found no soundness violation anywhere
-  in the corpus.
+- Every issue the lane surfaced is resolved as of 2026-07-22: division
+  tightness (enc-ghz), `pown` tightness and its negative-power overflow
+  collapse (enc-5jj), the `pown_rev` root brackets and its negative-exponent
+  subnormal saturation (enc-cov, enc-ral), the `setDec` clamping divergence
+  (enc-2hd), the decorated `mulRevToPair` doctrine (enc-pzd), and the
+  decorated surface gaps (enc-ks9); the Fixed and Added sections carry each.
+  Every non-tight result the lane surfaced had been a verified sound
+  enclosure; the lane found no soundness violation anywhere in the corpus.
 
 - The reverse operations on `Interval<F>` and `DecoratedInterval<F>`, in a new
   `reverse` module, each in its explicit-candidate form
   (`f_rev(c, x) = hull({ t in x : f(t) in c })`, the standard's candidate-less
-  form recovered at `x = entire`): `sqr_rev`, `abs_rev`, `pown_rev`, `mul_rev`,
-  and the two-output `mul_rev_to_pair` over bare `RoundFloat`; `sin_rev`,
-  `cos_rev`, `tan_rev` behind `F: RoundInverseTrig`; `cosh_rev` behind
+  form recovered at `x = entire`): `sqr_rev`, `abs_rev`, `mul_rev`, and the
+  two-output `mul_rev_to_pair` over bare `RoundFloat`; `pown_rev` behind
+  `F: RoundFloat + RoundPown` (see the Fixed section); `sin_rev`, `cos_rev`,
+  `tan_rev` behind `F: RoundInverseTrig`; `cosh_rev` behind
   `F: RoundInverseHyperbolic`; and `pow_rev1`, `pow_rev2` behind
   `F: RoundTranscendental`. The arithmetic reverses are the tightest
-  representable result over any `RoundFloat` from directed arithmetic: the square
-  and integer roots come from a two-phase value-domain bisection over the
-  directed `pown` chain (geometric probes by directed `sqrt` while the bracket is
-  wide, arithmetic probes once it is narrow, a multiplicative straddle refinement
-  at the exit; never `RoundPow`, so the arm is exact on backends that lack it),
-  and `mul_rev`/`mul_rev_to_pair` from the zero-straddle case table of the
-  two-output division, with `mul_rev` the hull of the pair's two pieces each
-  intersected with the candidate. The periodic reverses enumerate exactly the
+  representable result: `sqr_rev` from directed `sqrt`, `pown_rev` from a
+  two-phase value-domain bisection (geometric probes by directed `sqrt` while the
+  bracket is wide, arithmetic probes once it is narrow) over the exact `RoundPown`
+  directed pair, ending in a neighbor certification, and
+  `mul_rev`/`mul_rev_to_pair` from the zero-straddle case table of the two-output
+  division, with `mul_rev` the hull of the pair's two pieces each intersected with
+  the candidate. The periodic reverses enumerate exactly the
   preimage arcs that can meet the candidate, wherever it sits: arc placement is
   by sound interval sums of doubled period-enclosure blocks (a galloping landing
   and a one-period walk, so no float arc counter can drift off the integers),
@@ -106,8 +125,10 @@ v1.0; before then the API may break between 0.x releases.
   in a new `inverse` module: `asin`, `acos`, `atan`, `atan2` (behind
   `F: RoundInverseTrig`), `asinh`, `acosh`, `atanh` (behind
   `F: RoundInverseHyperbolic`), `exp2`, `exp10`, `log2`, `log10` (behind
-  `F: RoundExpBases`), and `pown` over bare `RoundFloat` as directed integer
-  power chains with the negative exponent taken as the set-level reciprocal. Ten
+  `F: RoundExpBases`), and `pown` behind `F: RoundFloat + RoundPown`, its
+  endpoint powers correctly rounded by the exact integer kernel and its
+  negative-exponent image derived endpoint-wise under a parity and zero-position
+  case table (round-float decision record 0004). Ten of the transcendental
   arms are monotone endpoint images with set-based domain restriction (`acos`
   antitone); `atan2` is a directed corner reduction derived from the vanishing
   gradient, with the full-hull branch-cut crossing, the `+0` normalization for
@@ -325,6 +346,26 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Changed
 
+- `Interval::pown` and `DecoratedInterval::pown` now sit behind the
+  `F: RoundFloat + RoundPown` bound (was bare `RoundFloat`): each endpoint power
+  is a correctly rounded kernel call rather than a directed repeated-squaring
+  chain. A compile break for a third-party backend that implements only bare
+  `RoundFloat`; accepted pre-1.0, since a conforming backend owes `pown`.
+  Round-float decision record 0004.
+- `Interval::pown_rev` and `DecoratedInterval::pown_rev` likewise move behind the
+  `F: RoundFloat + RoundPown` bound (was bare `RoundFloat`), so the reverse root
+  rides the exact kernel that funds correct rounding. The other arithmetic
+  reverses (`sqr_rev`, `abs_rev`, `mul_rev`, `mul_rev_to_pair`) stay on bare
+  `RoundFloat`. Same pre-1.0 compile-break rationale. See the Fixed section.
+- `DecoratedInterval::set_dec` now clamps an inconsistent (interval, decoration)
+  pair to the strongest consistent decoration, matching the standard's `setDec`:
+  an empty interval forces `trv`, an unbounded interval demotes `com` to `dac`,
+  and a request for `ill` returns `NaI`. It previously returned `NaI` for any
+  inconsistent pair, so this changes the semantics for existing callers; the
+  strict behavior is available as the new `try_set_dec`. The change closes the
+  six `minimal_set_dec_test` clamping vectors (bead enc-2hd) and is recorded in
+  crate decision record 0007. Every caller within the crate passes a decoration
+  consistent by construction, so none changes behavior.
 - `mid`, `rad`, and `mid_rad` now sit behind the `RoundLargestFinite` capability
   bound and follow IEEE 1788's Level 2 realmax convention on half-unbounded
   intervals: `mid([a, +inf]) = +LARGEST_FINITE`, `mid([-inf, b]) =
@@ -349,9 +390,73 @@ v1.0; before then the API may break between 0.x releases.
 
 ### Fixed
 
+- Interval division is bit-exact tightest. `a / b` was `a * recip(b)`, the
+  four-corner product of the dividend and the reciprocal, two directed roundings
+  where the standard's tightest accuracy admits one; the second rounding lost a
+  unit in the last place on an inexact quotient, so 56 corpus vectors enclosed the
+  tight result one ulp loose per affected endpoint (`[-30, -15] / [-5, -3]` came
+  back `[2.999..., 10.000...]` for the exact `[3, 10]`). Division now rounds each
+  quotient endpoint once through the backend's directed division, selecting the
+  corner that attains the bound from the divisor's sign, and the zero-divisor
+  cases (empty, half-lines, the whole line) fall out with exact endpoints and no
+  reciprocal. The sign-cased core is shared with the reverse-division path so the
+  forward and reverse quotients cannot drift. The 56 relocated conformance vectors
+  are folded back into `minimal_div_test`; all 341 `div` rows are bit-exact over
+  `TightF64`, and a property lane checks soundness on sampled points and that the
+  new result is a subset of the old reciprocal composition (bead enc-ghz).
+- `pown` is now bit-exact tightest over `TightF64` on all 163 corpus vectors
+  (bead enc-5jj). The two tightness losses are gone: the repeated-squaring chain
+  rounded once per multiply (loose for exponent magnitude three and above), and
+  the negative-power path took a set-level reciprocal of the magnitude image that
+  collapsed near the subnormal edge when the magnitude power overflowed (a
+  `[f64::MAX, f64::MAX]` base with `|n| >= 2` yielded `[+0, ~2^-1024]` where the
+  tight result is `[+0, 2^-1074]`). Endpoint powers now ride the exact
+  `RoundPown` integer kernel, and the negative-exponent image is derived
+  endpoint-wise under a parity and zero-position case table. The former
+  known-defect twin `minimal_pown_test_known_defect` is retired. Round-float
+  decision record 0004; workspace decision record 0007 erratum.
+- `Interval::inf` and `Interval::sup` now return the Level 2 signed-zero datum: a
+  zero infimum reads `-0`, a zero supremum reads `+0`, whatever sign the stored
+  endpoint carries (so `inf([0, +inf])` is `-0`, where the accessor previously
+  passed the stored `+0` through). This makes the bare numeric functions agree
+  bit-exactly with the corpus and with the new decorated `inf`/`sup`; the
+  `minimal_inf_test`/`minimal_sup_test` zero-endpoint vectors now assert the sign
+  bit-exactly rather than value-equally. The text serialization (`Display`,
+  `interval_to_exact`) is unaffected: it reads the raw stored endpoints so a
+  printed interval still round-trips bit for bit; only the numeric functions and
+  the stored representation part ways, and only on the sign of a zero. Bead
+  enc-ks9.
+- `pown_rev` roots are correctly rounded for exponent magnitude one through
+  `RoundPown::POWN_TIGHT_MAX`, all 358 corpus vectors now bit-exact over
+  `TightF64` (beads enc-cov, enc-ral). The positive-exponent root bisects on the
+  float grid over the exact `RoundPown` directed pair and ends with a neighbor
+  certification that decides each candidate float's power against the constraint
+  exactly (the straddle-exit bracket that left one-to-three-ulp looseness for
+  exponent magnitude three and above is gone; minimized case
+  `pown_rev([0, 0x1.A87587109655P+66], 8)` yields sup `0x407444ccccccccce`, was
+  `...ccf`). The negative-exponent path roots first then reciprocates at the
+  scalar level, so no set-level reciprocal saturates at the subnormal edge
+  (`pown_rev([0, 5e-324], -3)` reaches `2^358`, was `~2^341`); where the
+  constraint reciprocal is representable the pair is certified correctly rounded,
+  and where it overflows the directed root-then-reciprocal seed matches the
+  reference implementation's own `rootn` (the value the corpus pins, one ulp
+  inside the tightest floor for a non-power-of-two root). The private
+  repeated-squaring chain copies (`abs_pow_down`/`abs_pow_up`) are deleted;
+  `pown_rev` and its decorated twin gain the `RoundPown` bound. The former
+  known-defect and known-gap twins are retired. Decision record 0006 erratum.
 - Decorated `+`, `-`, `*`, `/`, `recip`, `sqr`, `sqrt`, and `mul_add` no longer
   pack `com` with an overflowed unbounded result. A bounded operation can reach
   `[lo, +inf]`, and `com` promises a bounded result, so the shared `pack` seam
   now demotes `com` to `dac` whenever the assembled interval is unbounded. This
   extends the overflow rule decision record 0004 established for `exp` and `ln`
   to every decorated operation; `mul_add` gains its decorated form here.
+- Decorated `mul_rev_to_pair` now propagates the normal division's decoration
+  on its first output piece instead of grading every piece `trv`. The standard
+  defines the two-output division in its own subclause and requires the first
+  piece to carry the decoration of `c / b` when zero lies outside the divisor
+  `b` (P1788/D8.4 clause 12.12.4, carried into IEEE 1788-2015 clause 12.12.3);
+  only the empty second piece and the genuine zero-straddling split stay `trv`.
+  The previously ignored 175-vector `minimal_mulRevToPair_dec_test` corpus is
+  now asserted and green, values and decorations. Decision record 0006 gains an
+  Errata correcting part 5; the `trv` doctrine still holds for the one-output
+  reverse operations (enc-pzd).
